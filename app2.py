@@ -4,7 +4,7 @@ import yfinance as yf
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-from scipy.cluster.hierarchy import linkage, dendrogram
+from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 import ta
 
@@ -12,14 +12,17 @@ def hierarchical_risk_parity(returns):
     """
     Implementa HRP (Hierarchical Risk Parity)
     """
+    # Manejo de NaN
+    returns = returns.fillna(method='ffill').fillna(method='bfill')
+    
     # 1. Calcular matriz de correlación
     corr = returns.corr()
     
     # 2. Convertir correlación a distancia
-    dist = np.sqrt(2 * (1 - corr))
+    dist = np.sqrt(0.5 * (1 - corr)).values
     
     # 3. Clustering jerárquico
-    link = linkage(squareform(dist), 'single')
+    link = linkage(squareform(dist, checks=False), 'ward')
     
     # 4. Ordenar activos basado en el clustering
     def quasi_diag(link):
@@ -44,7 +47,92 @@ def hierarchical_risk_parity(returns):
     
     # 6. Redistribuir pesos según clusters
     sorted_weights = weights[sort_ix.astype(int)]
-    return pd.Series(sorted_weights, index=returns.columns)
+    weights_dict = pd.Series(sorted_weights.values, index=returns.columns[sort_ix.astype(int)])
+    return weights_dict
+
+@st.cache_data
+def get_portfolio_data(tickers, period, interval):
+    try:
+        portfolio_data = pd.DataFrame()
+        info_dict = {}
+        
+        for ticker in tickers:
+            stock = yf.Ticker(ticker)
+            df = stock.history(period=period, interval=interval)
+            if not df.empty:
+                portfolio_data[f"{ticker}_Close"] = df['Close']
+                portfolio_data[f"{ticker}_Volume"] = df['Volume']
+                info_dict[ticker] = stock.info
+        
+        if portfolio_data.empty:
+            raise Exception("No se pudieron obtener datos para ningún ticker")
+            
+        return portfolio_data, info_dict
+    except Exception as e:
+        st.error(f"Error al obtener datos: {e}")
+        return None, None
+
+def calculate_metrics(portfolio_data, weights):
+    """Calcula métricas de rendimiento"""
+    try:
+        returns = portfolio_data.filter(like='Close').pct_change().fillna(0)
+        # Convertir weights a la misma estructura que returns
+        weights_aligned = pd.Series(weights, index=returns.columns)
+        portfolio_return = returns.dot(weights_aligned)
+        
+        risk_free_rate = 0.02
+        # Sharpe Ratio
+        sharpe = np.sqrt(252) * (portfolio_return.mean() - risk_free_rate/252) / portfolio_return.std()
+        
+        # Sortino Ratio
+        downside_returns = portfolio_return[portfolio_return < 0]
+        sortino = np.sqrt(252) * (portfolio_return.mean() - risk_free_rate/252) / (downside_returns.std() or 1e-6)
+        
+        # Drawdown y Calmar Ratio
+        cum_returns = (1 + portfolio_return).cumprod()
+        rolling_max = cum_returns.expanding().max()
+        drawdowns = (cum_returns - rolling_max) / rolling_max
+        max_drawdown = drawdowns.min()
+        calmar = (-252 * portfolio_return.mean() / (max_drawdown or -1e-6)) if max_drawdown != 0 else np.inf
+        
+        return {
+            'Sharpe': sharpe,
+            'Sortino': sortino,
+            'Calmar': calmar,
+            'Max Drawdown': max_drawdown
+        }
+    except Exception as e:
+        st.error(f"Error en cálculo de métricas: {e}")
+        return {
+            'Sharpe': 0,
+            'Sortino': 0,
+            'Calmar': 0,
+            'Max Drawdown': 0
+        }
+
+def calculate_technical_indicators(df, symbol):
+    """Calcula indicadores técnicos"""
+    try:
+        df = df.copy()
+        close_price = df[f'{symbol}_Close']
+        volume = df[f'{symbol}_Volume']
+        
+        df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
+            high=close_price, 
+            low=close_price, 
+            close=close_price, 
+            volume=volume
+        )
+        
+        df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close_price, window=20)
+        df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(close_price, window=50)
+        df[f'{symbol}_SMA20'] = ta.trend.sma_indicator(close_price, window=20)
+        df[f'{symbol}_SMA50'] = ta.trend.sma_indicator(close_price, window=50)
+        
+        return df
+    except Exception as e:
+        st.error(f"Error en cálculo de indicadores técnicos: {e}")
+        return df
 
 # Configuración de la página
 st.set_page_config(page_title="Plataforma de Trading Avanzada", layout="wide")
@@ -53,7 +141,7 @@ st.title("📈 Plataforma de Trading Avanzada")
 # Sidebar para configuración
 with st.sidebar:
     st.header("Configuración")
-    symbols_input = st.text_input("Símbolos (separados por coma)", value="AAPL,MSFT,GOOGL")
+    symbols_input = st.text_input("Símbolos (separados por coma)", value="AAPL,MSFT,GOOGL,AMZN")
     symbols = [s.strip() for s in symbols_input.split(",")]
     
     period = st.selectbox(
@@ -68,88 +156,38 @@ with st.sidebar:
         index=0
     )
 
-@st.cache_data
-def get_portfolio_data(tickers, period, interval):
-    try:
-        portfolio_data = pd.DataFrame()
-        info_dict = {}
-        
-        for ticker in tickers:
-            stock = yf.Ticker(ticker)
-            df = stock.history(period=period, interval=interval)
-            portfolio_data[f"{ticker}_Close"] = df['Close']
-            portfolio_data[f"{ticker}_Volume"] = df['Volume']
-            info_dict[ticker] = stock.info
-            
-        return portfolio_data, info_dict
-    except Exception as e:
-        st.error(f"Error al obtener datos: {e}")
-        return None, None
-
-def calculate_metrics(portfolio_data, weights):
-    returns = portfolio_data.filter(like='Close').pct_change()
-    portfolio_return = returns.dot(weights)
-    
-    risk_free_rate = 0.02
-    sharpe = np.sqrt(252) * (portfolio_return.mean() - risk_free_rate/252) / portfolio_return.std()
-    
-    downside_returns = portfolio_return[portfolio_return < 0]
-    sortino = np.sqrt(252) * (portfolio_return.mean() - risk_free_rate/252) / downside_returns.std()
-    
-    cum_returns = (1 + portfolio_return).cumprod()
-    rolling_max = cum_returns.expanding().max()
-    drawdowns = (cum_returns - rolling_max) / rolling_max
-    max_drawdown = drawdowns.min()
-    calmar = -252 * portfolio_return.mean() / max_drawdown
-    
-    return {
-        'Sharpe': sharpe,
-        'Sortino': sortino,
-        'Calmar': calmar,
-        'Max Drawdown': max_drawdown
-    }
-
-def calculate_technical_indicators(df, symbol):
-    df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
-        high=df[f'{symbol}_Close'],
-        low=df[f'{symbol}_Close'],
-        close=df[f'{symbol}_Close'],
-        volume=df[f'{symbol}_Volume']
-    )
-    
-    df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(df[f'{symbol}_Close'], window=20)
-    df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(df[f'{symbol}_Close'], window=50)
-    df[f'{symbol}_SMA20'] = ta.trend.sma_indicator(df[f'{symbol}_Close'], window=20)
-    df[f'{symbol}_SMA50'] = ta.trend.sma_indicator(df[f'{symbol}_Close'], window=50)
-    
-    return df
-
 # Obtener datos
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
-    # Calcular retornos y aplicar HRP
-    returns = portfolio_data.filter(like='Close').pct_change().dropna()
-    weights = hierarchical_risk_parity(returns)
-    weights_dict = weights.to_dict()
+    # Preparar datos para HRP
+    close_cols = [col for col in portfolio_data.columns if col.endswith('_Close')]
+    returns = portfolio_data[close_cols].pct_change().dropna()
+    returns.columns = [col.replace('_Close', '') for col in returns.columns]
+    
+    # Calcular pesos usando HRP
+    try:
+        weights = hierarchical_risk_parity(returns)
+    except Exception as e:
+        st.error(f"Error en el cálculo de HRP: {e}")
+        weights = pd.Series({symbol: 1/len(symbols) for symbol in symbols})
     
     # Crear pestañas
     tab1, tab2, tab3 = st.tabs(["Análisis de Cartera", "Métricas de Rendimiento", "Análisis Técnico"])
     
     with tab1:
         st.subheader("Composición Optimizada de la Cartera (HRP)")
-        weights_df = pd.DataFrame(list(weights_dict.items()), columns=['Activo', 'Peso'])
-        weights_df['Peso'] = weights_df['Peso'].round(4) * 100
+        weights_df = pd.DataFrame({'Activo': weights.index, 'Peso': weights.values * 100})
         
         fig = go.Figure(data=[go.Pie(labels=weights_df['Activo'],
                                    values=weights_df['Peso'],
                                    textinfo='label+percent')])
         st.plotly_chart(fig, use_container_width=True)
         
-        st.dataframe(weights_df)
+        st.dataframe(weights_df.round(2))
     
     with tab2:
-        metrics = calculate_metrics(portfolio_data, list(weights_dict.values()))
+        metrics = calculate_metrics(portfolio_data, weights)
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -161,7 +199,10 @@ if portfolio_data is not None and not portfolio_data.empty:
         with col4:
             st.metric("Max Drawdown", f"{metrics['Max Drawdown']:.2%}")
         
-        portfolio_returns = portfolio_data.filter(like='Close').pct_change().dot(list(weights_dict.values()))
+        # Cálculo de retornos de la cartera
+        close_prices = portfolio_data.filter(like='Close')
+        close_prices.columns = [col.replace('_Close', '') for col in close_prices.columns]
+        portfolio_returns = (close_prices.pct_change() * weights).sum(axis=1)
         cumulative_returns = (1 + portfolio_returns).cumprod()
         
         fig = go.Figure()
