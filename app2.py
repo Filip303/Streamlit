@@ -335,8 +335,9 @@ if portfolio_data is not None and not portfolio_data.empty:
             total = price * quantity
             st.write(f"Operation Total: ${total:,.2f}")
         
-        if st.button("Execute Order"):st.success(f"{operation} order executed: {quantity} {selected_symbol} at ${price:.2f}")
-            st.write(f"Total: ${total:,.2f}")
+        if st.button("Execute Order"):
+    st.success(f"{operation} order executed: {quantity} {selected_symbol} at ${price:.2f}")
+    st.write(f"Total: ${total:,.2f}")
 
 if __name__ == "__main__":
     st.sidebar.markdown("---")
