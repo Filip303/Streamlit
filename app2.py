@@ -229,13 +229,30 @@ if portfolio_data is not None and not portfolio_data.empty:
         portfolio_returns = (close_prices.pct_change() * weights).sum(axis=1)
         cumulative_returns = (1 + portfolio_returns).cumprod()
         
+        # Obtener datos del SPY y URTH
+        spy_data = yf.download("SPY", period=period, interval=interval)['Close']
+        urth_data = yf.download("URTH", period=period, interval=interval)['Close']
+        
+        # Calcular retornos acumulados para SPY y URTH
+        spy_cum_returns = (1 + spy_data.pct_change().fillna(0)).cumprod()
+        urth_cum_returns = (1 + urth_data.pct_change().fillna(0)).cumprod()
+        
+        # Gráfico de retornos acumulados en escala logarítmica
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=cumulative_returns.index,
                                y=cumulative_returns,
-                               name='Retorno Acumulado'))
-        fig.update_layout(title="Evolución de la Cartera",
+                               name='Cartera'))
+        fig.add_trace(go.Scatter(x=spy_cum_returns.index,
+                               y=spy_cum_returns,
+                               name='SPY'))
+        fig.add_trace(go.Scatter(x=urth_cum_returns.index,
+                               y=urth_cum_returns,
+                               name='URTH'))
+        fig.update_layout(title="Comparación de Retornos Acumulados (Escala Logarítmica)",
                          xaxis_title="Fecha",
-                         yaxis_title="Retorno Acumulado")
+                         yaxis_title="Retorno Acumulado",
+                         yaxis_type="log",
+                         height=600)
         st.plotly_chart(fig, use_container_width=True)
     
     with tab3:
@@ -267,9 +284,10 @@ if portfolio_data is not None and not portfolio_data.empty:
                                y=technical_data[f'{selected_symbol}_SMA50'],
                                name='SMA 50'))
         
-        fig.update_layout(title=f"Análisis Técnico - {selected_symbol}",
+        fig.update_layout(title=f"Análisis Técnico - {selected_symbol} (Escala Logarítmica)",
                          xaxis_title="Fecha",
                          yaxis_title="Precio",
+                         yaxis_type="log",
                          height=600)
         
         st.plotly_chart(fig, use_container_width=True)
