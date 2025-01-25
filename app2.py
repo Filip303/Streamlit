@@ -23,49 +23,65 @@ def get_portfolio_data(tickers, period, interval):
             st.warning(f"Error getting data for {ticker}: {e}")
     return portfolio_data, info_dict
 
-def quasi_diag(link):
-    link = link.astype(int)
-    sort_ix = []
-    sort_ix.extend([link[-1, 0], link[-1, 1]])
-    num_items = link[-1, 3]
-    for i in range(len(link) - 2, -1, -1):
-        if link[i, 0] >= num_items:
-            sort_ix.append(link[i, 1])
-        elif link[i, 1] >= num_items:
-            sort_ix.append(link[i, 0])
-    return np.array([x for x in sort_ix if x < num_items])
-
 def hierarchical_risk_parity(returns):
     try:
+        # Clean and prepare data
         returns = returns.replace([np.inf, -np.inf], np.nan)
         returns = returns.fillna(method='ffill').fillna(method='bfill')
         
         if returns.empty or returns.isna().all().all():
             raise ValueError("Insufficient data for calculation")
         
+        # Calculate correlation and distance matrices
         corr = returns.corr()
         dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
         dist = np.nan_to_num(dist, nan=0.0)
         
+        # Perform hierarchical clustering
         link = linkage(squareform(dist), method='ward')
-        sort_ix = quasi_diag(link)
         
-        sorted_returns = returns.iloc[:, sort_ix]
-        var = sorted_returns.var()
-        var = var.replace(0, np.finfo(float).eps)
-        weights = 1/var
-        weights = weights/weights.sum()
+        # Get clustered index
+        clustered_index = returns.columns[quasi_diag(link)]
         
-        weights_series = pd.Series(weights, index=sorted_returns.columns)
+        # Calculate inverse variance weights
+        variances = returns[clustered_index].var()
+        variances = variances.replace(0, np.finfo(float).eps)
+        inv_var_weights = 1 / variances
         
-        if not weights_series.isna().any():
-            return weights_series
-        else:
+        # Normalize weights
+        weights = inv_var_weights / inv_var_weights.sum()
+        
+        # Create final weights series with original column names
+        weights_series = pd.Series(weights.values, index=clustered_index)
+        
+        if weights_series.isna().any():
             raise ValueError("Error in weight calculation")
             
+        return weights_series
+        
     except Exception as e:
         st.error(f"Error in HRP: {e}")
-        return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
+        equal_weights = pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
+        return equal_weights
+
+def quasi_diag(link):
+    link = link.astype(int)
+    num_items = link[-1, 3]
+    sort_ix = []
+    curr_index = link[-1, 0]  # Start with first index from last row
+    
+    while len(sort_ix) < num_items:
+        if curr_index < num_items:
+            sort_ix.append(curr_index)
+        else:
+            # Find the row where this index was created
+            row = link[curr_index - num_items]
+            # Add its components to the stack
+            sort_ix.extend([row[1], row[0]])
+        if len(sort_ix) < num_items:
+            curr_index = sort_ix.pop()
+            
+    return sort_ix
 
 def get_benchmark_data(period, interval):
     try:
@@ -320,8 +336,29 @@ if portfolio_data is not None and not portfolio_data.empty:
                     indicator_fig.add_hline(y=70, line_dash="dash", line_color="red")
                     indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
                 
-                st.plotly_chart(indicator_fig, use_container_width=True)
+                st.plotly_chart(indicator_fig, use_container_width, use_container_width=True)
+
+# Trading Panel
+st.subheader("Trading Panel")
+col1, col2 = st.columns(2)
+
+with col1:
+    operation = st.radio("Operation Type", ["Buy", "Sell"])
+    quantity = st.number_input("Quantity", min_value=1, value=1)
+
+with col2:
+    price = st.number_input("Price",
+                          min_value=0.01,
+                          value=float(technical_data[f'{selected_symbol}_Close'].iloc[-1]),
+                          format="%.2f")
+    
+    total = price * quantity
+    st.write(f"Operation Total: ${total:,.2f}")
+
+if st.button("Execute Order"):
+    st.success(f"{operation} order executed: {quantity} {selected_symbol} at ${price:.2f}")
+    st.write(f"Total: ${total:,.2f}")
 
 if __name__ == "__main__":
     st.sidebar.markdown("---")
-    st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")
+    st.sidebar.info("Demo platform - Not for real trading")
