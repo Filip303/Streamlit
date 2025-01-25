@@ -37,56 +37,46 @@ def quasi_diag(link):
             sort_ix.append(link[i, 0])
     return np.array([x for x in sort_ix if x < num_items])
 
+ Función para calcular los pesos HRP
 def hierarchical_risk_parity(returns):
-    try:
-        # Limpieza de datos: reemplazar infinitos y NaN
-        returns = returns.replace([np.inf, -np.inf], np.nan)
-        returns = returns.fillna(method='ffill').fillna(method='bfill')
-        
-        # Verificar si hay suficientes datos
-        if returns.empty or returns.isna().all().all():
-            raise ValueError("Insufficient data for calculation")
-        
-        # Calcular la matriz de correlación
-        corr = returns.corr()
-        
-        # Verificar si la matriz de correlación es válida
-        if corr.isna().any().any():
-            raise ValueError("Correlation matrix contains NaN values")
-        
-        # Calcular la matriz de distancias
-        dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
-        dist = np.nan_to_num(dist, nan=0.0)
-        
-        # Construir la estructura jerárquica usando linkage
-        link = linkage(squareform(dist), method='ward')
-        
-        # Ordenar los activos usando quasi_diag
-        sort_ix = quasi_diag(link)
-        sorted_returns = returns.iloc[:, sort_ix]
-        
-        # Calcular la varianza de los rendimientos ordenados
-        var = sorted_returns.var()
-        var = var.replace(0, np.finfo(float).eps)  # Evitar divisiones por cero
-        
-        # Calcular los pesos iniciales
-        weights = 1 / var
-        weights = weights / weights.sum()  # Normalizar los pesos
-        
-        # Crear una serie de pesos con los nombres de los activos
-        weights_series = pd.Series(weights, index=sorted_returns.columns)
-        
-        # Verificar que los pesos sean válidos
-        if not weights_series.isna().any():
-            return weights_series
-        else:
-            raise ValueError("Error in weight calculation")
-            
-    except Exception as e:
-        st.error(f"Error in HRP: {e}")
-        # En caso de error, asignar pesos iguales a todos los activos
-        return pd.Series({col: 1.0 / len(returns.columns) for col in returns.columns})
-        
+    # Calcular matriz de correlación
+    corr = returns.corr()
+
+    # Verificar si hay valores faltantes
+    if corr.isnull().values.any():
+        raise ValueError("La matriz de correlación contiene valores NaN.")
+
+    # Convertir correlación a distancia
+    dist = np.sqrt(0.5 * (1 - corr))
+
+    # Construir el árbol jerárquico
+    link = linkage(squareform(dist), method='single')
+
+    # Calcular pesos por HRP
+    weights = pd.Series(1, index=returns.columns)
+    clusters = [returns.columns]
+
+    while len(clusters) > 0:
+        new_clusters = []
+        for cluster in clusters:
+            if len(cluster) == 1:
+                continue
+            corr_matrix = corr.loc[cluster, cluster]
+            variances = returns[cluster].var()
+            inv_var = 1 / variances
+            allocation = inv_var / inv_var.sum()
+
+            split = cluster[:len(cluster) // 2], cluster[len(cluster) // 2:]
+            for subcluster in split:
+                if len(subcluster) == 0:
+                    continue
+                sub_corr = corr_matrix.loc[subcluster, subcluster]
+                sub_allocation = allocation.loc[subcluster]
+                weights[subcluster] *= sub_allocation.sum()
+                new_clusters.append(subcluster)
+        clusters = new_clusters
+
+    return weights / weights.sum()        
 # Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
     try:
