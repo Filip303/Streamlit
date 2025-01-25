@@ -37,46 +37,57 @@ def quasi_diag(link):
             sort_ix.append(link[i, 0])
     return np.array([x for x in sort_ix if x < num_items])
 
- # Función para calcular los pesos HRP
+# Función para calcular los pesos HRP
 def hierarchical_risk_parity(returns):
-    # Calcular matriz de correlación
-    corr = returns.corr()
+    try:
+        # Limpieza de datos: reemplazar infinitos y NaN
+        returns = returns.replace([np.inf, -np.inf], np.nan)
+        returns = returns.fillna(method='ffill').fillna(method='bfill')
+        
+        # Verificar si hay suficientes datos
+        if returns.empty or returns.isna().all().all():
+            raise ValueError("Insufficient data for calculation")
+        
+        # Calcular la matriz de correlación
+        corr = returns.corr()
+        
+        # Verificar si la matriz de correlación es válida
+        if corr.isna().any().any():
+            raise ValueError("Correlation matrix contains NaN values")
+        
+        # Calcular la matriz de distancias
+        dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
+        dist = np.nan_to_num(dist, nan=0.0)
+        
+        # Construir la estructura jerárquica usando linkage
+        link = linkage(squareform(dist), method='ward')
+        
+        # Ordenar los activos usando quasi_diag
+        sort_ix = quasi_diag(link)
+        sorted_returns = returns.iloc[:, sort_ix]
+        
+        # Calcular la varianza de los rendimientos ordenados
+        var = sorted_returns.var()
+        var = var.replace(0, np.finfo(float).eps)  # Evitar divisiones por cero
+        
+        # Calcular los pesos iniciales
+        weights = 1 / var
+        weights = weights / weights.sum()  # Normalizar los pesos
+        
+        # Crear una serie de pesos con los nombres de los activos
+        weights_series = pd.Series(weights, index=sorted_returns.columns)
+        
+        # Verificar que los pesos sean válidos
+        if not weights_series.isna().any():
+            return weights_series
+        else:
+            raise ValueError("Error in weight calculation")
+            
+    except Exception as e:
+        st.error(f"Error in HRP: {e}")
+        # En caso de error, asignar pesos iguales a todos los activos
+        return pd.Series({col: 1.0 / len(returns.columns) for col in returns.columns})
 
-    # Verificar si hay valores faltantes
-    if corr.isnull().values.any():
-        raise ValueError("La matriz de correlación contiene valores NaN.")
-
-    # Convertir correlación a distancia
-    dist = np.sqrt(0.5 * (1 - corr))
-
-    # Construir el árbol jerárquico
-    link = linkage(squareform(dist), method='single')
-
-    # Calcular pesos por HRP
-    weights = pd.Series(1, index=returns.columns)
-    clusters = [returns.columns]
-
-    while len(clusters) > 0:
-        new_clusters = []
-        for cluster in clusters:
-            if len(cluster) == 1:
-                continue
-            corr_matrix = corr.loc[cluster, cluster]
-            variances = returns[cluster].var()
-            inv_var = 1 / variances
-            allocation = inv_var / inv_var.sum()
-
-            split = cluster[:len(cluster) // 2], cluster[len(cluster) // 2:]
-            for subcluster in split:
-                if len(subcluster) == 0:
-                    continue
-                sub_corr = corr_matrix.loc[subcluster, subcluster]
-                sub_allocation = allocation.loc[subcluster]
-                weights[subcluster] *= sub_allocation.sum()
-                new_clusters.append(subcluster)
-        clusters = new_clusters
-
-    return weights / weights.sum()        
 # Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
     try:
@@ -197,7 +208,7 @@ def calculate_var_cvar(returns, confidence_level=0.95):
     cvar = sorted_returns[sorted_returns <= var].mean()
     
     return var, cvar
-    
+
 # Configuración de la página
 st.set_page_config(page_title="Trading Platform V2", layout="wide")
 
@@ -244,41 +255,48 @@ if portfolio_data is not None and not portfolio_data.empty:
         st.dataframe(weights_df.round(2))
     
     with tab2:
-    metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
-    if metrics:
-        columns = ['Portfolio']
-        if 'SPY' in metrics:
-            columns.extend(['SPY', 'URTH'])
+        metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
+        if metrics:
+            columns = ['Portfolio']
+            if 'SPY' in metrics:
+                columns.extend(['SPY', 'URTH'])
+                
+            # Crear el DataFrame de métricas
+            metrics_data = {
+                'Metric': ['Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Max Drawdown', 'VaR (95%)', 'CVaR (95%)']
+            }
             
-        metrics_df = pd.DataFrame({
-            'Metric': ['Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Max Drawdown', 'VaR (95%)', 'CVaR (95%)'],
-            **{col: [
-                f"{metrics[col]['Sharpe']:.2f}",
-                f"{metrics[col]['Sortino']:.2f}",
-                f"{metrics[col]['Calmar']:.2f}",
-                f"{metrics[col]['Max Drawdown']:.2%}",
-                *[f"{x:.2%}" for x in calculate_var_cvar(metrics[col]['Returns'], confidence_level=0.95)]
-            ] for col in columns}
-        })
-        
-        st.dataframe(metrics_df)
-        
-        fig = go.Figure()
-        for col in columns:
-            fig.add_trace(go.Scatter(
-                x=metrics[col]['Returns'].index,
-                y=metrics[col]['Returns'],
-                name=col
-            ))
-        
-        fig.update_layout(
-            title="Performance Comparison",
-            xaxis_title="Date",
-            yaxis_title="Cumulative Return",
-            height=500,
-            yaxis_type='log' if use_log else 'linear'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+            for col in columns:
+                var, cvar = calculate_var_cvar(metrics[col]['Returns'], confidence_level=0.95)
+                metrics_data[col] = [
+                    f"{metrics[col]['Sharpe']:.2f}",
+                    f"{metrics[col]['Sortino']:.2f}",
+                    f"{metrics[col]['Calmar']:.2f}",
+                    f"{metrics[col]['Max Drawdown']:.2%}",
+                    f"{var:.2%}",
+                    f"{cvar:.2%}"
+                ]
+            
+            metrics_df = pd.DataFrame(metrics_data)
+            st.dataframe(metrics_df)
+            
+            # Gráfico de rendimientos acumulados
+            fig = go.Figure()
+            for col in columns:
+                fig.add_trace(go.Scatter(
+                    x=metrics[col]['Returns'].index,
+                    y=metrics[col]['Returns'],
+                    name=col
+                ))
+            
+            fig.update_layout(
+                title="Performance Comparison",
+                xaxis_title="Date",
+                yaxis_title="Cumulative Return",
+                height=500,
+                yaxis_type='log' if use_log else 'linear'
+            )
+            st.plotly_chart(fig, use_container_width=True)
     
     with tab3:
         selected_symbol = st.selectbox("Select Asset", symbols)
