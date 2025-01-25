@@ -8,39 +8,69 @@ from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 import ta
 
+@st.cache_data
+def get_portfolio_data(tickers, period, interval):
+    try:
+        portfolio_data = pd.DataFrame()
+        info_dict = {}
+        
+        for ticker in tickers:
+            try:
+                stock = yf.Ticker(ticker)
+                df = stock.history(period=period, interval=interval)
+                if not df.empty:
+                    portfolio_data[f"{ticker}_Close"] = df['Close']
+                    portfolio_data[f"{ticker}_Volume"] = df['Volume']
+                    info_dict[ticker] = stock.info
+            except Exception as e:
+                st.warning(f"Error al obtener datos para {ticker}: {e}")
+                continue
+        
+        if portfolio_data.empty:
+            st.error("No se pudieron obtener datos para ningún ticker")
+            return None, None
+            
+        expected_columns = [f"{ticker}_Close" for ticker in tickers]
+        if not all(col in portfolio_data.columns for col in expected_columns):
+            missing = [ticker for ticker in tickers 
+                      if f"{ticker}_Close" not in portfolio_data.columns]
+            st.warning(f"Faltantes datos para: {', '.join(missing)}")
+        
+        return portfolio_data, info_dict
+    except Exception as e:
+        st.error(f"Error al obtener datos del portafolio: {e}")
+        return None, None
+
 def hierarchical_risk_parity(returns):
-    # Preparación y limpieza de datos
-    returns = returns.replace([np.inf, -np.inf], np.nan)
-    returns = returns.fillna(method='ffill').fillna(method='bfill')
-    
-    # Verificar datos finitos
-    if not returns.notna().all().all():
-        returns = returns.fillna(returns.mean())
-    
-    # Matriz de correlación
-    corr = returns.corr()
-    
-    # Convertir correlación a distancia con validación
-    dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
-    dist = np.nan_to_num(dist, nan=0.0)
-    
-    # Verificar que la matriz es válida
-    if not np.isfinite(dist).all():
-        raise ValueError("Matriz de distancia contiene valores no finitos")
-    
-    # Clustering jerárquico
-    link = linkage(squareform(dist), method='ward')
-    
-    # Ordenamiento y cálculo de pesos
-    sort_ix = quasi_diag(link)
-    
-    # Cálculo de pesos con manejo de errores
-    var = returns.var()
-    var = var.replace(0, np.finfo(float).eps)  # Reemplazar ceros con epsilon
-    weights = 1/var
-    weights = weights/weights.sum()
-    
-    return pd.Series(weights.values, index=returns.columns)
+    try:
+        returns = returns.replace([np.inf, -np.inf], np.nan)
+        returns = returns.fillna(method='ffill').fillna(method='bfill')
+        
+        if returns.empty or returns.isna().all().all():
+            raise ValueError("No hay datos suficientes para el cálculo")
+        
+        corr = returns.corr()
+        dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
+        dist = np.nan_to_num(dist, nan=0.0)
+        
+        link = linkage(squareform(dist), method='ward')
+        sort_ix = quasi_diag(link)
+        
+        var = returns.var()
+        var = var.replace(0, np.finfo(float).eps)
+        weights = 1/var
+        weights = weights/weights.sum()
+        
+        weights_series = pd.Series(weights.values, index=returns.columns)
+        
+        if not weights_series.isna().any():
+            return weights_series
+        else:
+            raise ValueError("Error en el cálculo de pesos")
+            
+    except Exception as e:
+        st.error(f"Error en HRP: {e}")
+        return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
 
 def quasi_diag(link):
     link = link.astype(int)
@@ -55,28 +85,6 @@ def quasi_diag(link):
             sort_ix.append(link[i, 0])
     
     return np.array([x for x in sort_ix if x < num_items])
-
-@st.cache_data
-def get_portfolio_data(tickers, period, interval):
-    try:
-        portfolio_data = pd.DataFrame()
-        info_dict = {}
-        
-        for ticker in tickers:
-            stock = yf.Ticker(ticker)
-            df = stock.history(period=period, interval=interval)
-            if not df.empty:
-                portfolio_data[f"{ticker}_Close"] = df['Close']
-                portfolio_data[f"{ticker}_Volume"] = df['Volume']
-                info_dict[ticker] = stock.info
-        
-        if portfolio_data.empty:
-            raise Exception("No se pudieron obtener datos para ningún ticker")
-            
-        return portfolio_data, info_dict
-    except Exception as e:
-        st.error(f"Error al obtener datos: {e}")
-        return None, None
 
 def calculate_metrics(portfolio_data, weights):
     try:
@@ -156,6 +164,7 @@ def calculate_technical_indicators(df, symbol):
         st.error(f"Error en cálculo de indicadores técnicos: {e}")
         return df
 
+# Configuración de la página
 st.set_page_config(page_title="Plataforma de Trading Avanzada", layout="wide")
 st.title("📈 Plataforma de Trading Avanzada")
 
@@ -244,10 +253,19 @@ if portfolio_data is not None and not portfolio_data.empty:
                                y=technical_data[f'{selected_symbol}_VWAP'],
                                name='VWAP'))
         
-        for indicator in ['EMA20', 'EMA50', 'SMA20', 'SMA50']:
-            fig.add_trace(go.Scatter(x=technical_data.index,
-                                   y=technical_data[f'{selected_symbol}_{indicator}'],
-                                   name=indicator))
+        fig.add_trace(go.Scatter(x=technical_data.index,
+                               y=technical_data[f'{selected_symbol}_EMA20'],
+                               name='EMA 20'))
+        fig.add_trace(go.Scatter(x=technical_data.index,
+                               y=technical_data[f'{selected_symbol}_EMA50'],
+                               name='EMA 50'))
+        
+        fig.add_trace(go.Scatter(x=technical_data.index,
+                               y=technical_data[f'{selected_symbol}_SMA20'],
+                               name='SMA 20'))
+        fig.add_trace(go.Scatter(x=technical_data.index,
+                               y=technical_data[f'{selected_symbol}_SMA50'],
+                               name='SMA 50'))
         
         fig.update_layout(title=f"Análisis Técnico - {selected_symbol}",
                          xaxis_title="Fecha",
@@ -267,11 +285,12 @@ if portfolio_data is not None and not portfolio_data.empty:
         
         st.dataframe(df_display)
         
+        # Señales de trading
         df_display['Señal'] = 'Mantener'
-        df_display.loc[technical_data[f'{selected_symbol}_EMA20'] > 
-                      technical_data[f'{selected_symbol}_EMA50'], 'Señal'] = 'Comprar'
-        df_display.loc[technical_data[f'{selected_symbol}_EMA20'] < 
-                      technical_data[f'{selected_symbol}_EMA50'], 'Señal'] = 'Vender'
+        df_display.loc[technical_data[f'{selected_symbol}_EMA20'].fillna(0) > 
+                      technical_data[f'{selected_symbol}_EMA50'].fillna(0), 'Señal'] = 'Comprar'
+        df_display.loc[technical_data[f'{selected_symbol}_EMA20'].fillna(0) < 
+                      technical_data[f'{selected_symbol}_EMA50'].fillna(0), 'Señal'] = 'Vender'
         
         st.subheader("Señales de Trading")
         latest_signal = df_display['Señal'].iloc[-1]
