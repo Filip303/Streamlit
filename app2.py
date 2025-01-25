@@ -38,15 +38,52 @@ def quasi_diag(link):
     return np.array([x for x in sort_ix if x < num_items])
 
 def hierarchical_risk_parity(returns):
-    returns = returns.fillna(method='ffill').fillna(method='bfill')
-    corr = returns.corr()
-    dist = np.sqrt(0.5 * (1 - corr))
-    link = linkage(squareform(dist), 'single')
-    sort_ix = quasi_diag(link)
-    weights = pd.Series(1/len(returns.columns), index=returns.columns)
-    return weights
+    try:
+        returns = returns.replace([np.inf, -np.inf], np.nan)
+        returns = returns.fillna(method='ffill').fillna(method='bfill')
+        
+        if returns.empty or returns.isna().all().all():
+            raise ValueError("Insufficient data for calculation")
+        
+        corr = returns.corr()
+        dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
+        dist = np.nan_to_num(dist, nan=0.0)
+        
+        link = linkage(squareform(dist), method='ward')
+        sort_ix = quasi_diag(link)
+        
+        sorted_returns = returns.iloc[:, sort_ix]
+        var = sorted_returns.var()
+        var = var.replace(0, np.finfo(float).eps)
+        weights = 1/var
+        weights = weights/weights.sum()
+        
+        weights_series = pd.Series(weights, index=sorted_returns.columns)
+        
+        if not weights_series.isna().any():
+            return weights_series
+        else:
+            raise ValueError("Error in weight calculation")
+            
+    except Exception as e:
+        st.error(f"Error in HRP: {e}")
+        return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
 
-def calculate_technical_indicators(df, symbol):
+def get_benchmark_data(period, interval):
+    try:
+        benchmarks = ['SPY', 'URTH']
+        benchmark_data = pd.DataFrame()
+        
+        for ticker in benchmarks:
+            stock = yf.Ticker(ticker)
+            df = stock.history(period=period, interval=interval)
+            if not df.empty:
+                benchmark_data[f"{ticker}_Close"] = df['Close']
+        
+        return benchmark_data
+    except Exception as e:
+        st.error(f"Error getting benchmark data: {e}")
+        return None(df, symbol):
     if df is None or df.empty:
         return pd.DataFrame()
         
@@ -77,39 +114,51 @@ def calculate_technical_indicators(df, symbol):
     return df.fillna(method='ffill').fillna(method='bfill')
 
 def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
-    if portfolio_data is None or portfolio_data.empty:
+    try:
+        metrics = {}
+        
+        # Portfolio returns
+        returns = portfolio_data.filter(like='Close').pct_change()
+        returns.columns = [col.replace('_Close', '') for col in returns.columns]
+        portfolio_return = (returns * weights).sum(axis=1)
+        
+        # Get benchmark data
+        benchmark_data = get_benchmark_data(period, interval)
+        benchmark_returns = benchmark_data.pct_change() if benchmark_data is not None else None
+        
+        for name, ret in [('Portfolio', portfolio_return)] + (
+            [('SPY', benchmark_returns['SPY_Close']), ('URTH', benchmark_returns['URTH_Close'])] 
+            if benchmark_returns is not None else []
+        ):
+            mean_return = ret.mean()
+            std_return = ret.std() or 1e-6
+            
+            sharpe = np.sqrt(252) * (mean_return - risk_free_rate/252) / std_return
+            
+            downside_returns = ret[ret < 0]
+            downside_std = downside_returns.std() or 1e-6
+            sortino = np.sqrt(252) * (mean_return - risk_free_rate/252) / downside_std
+            
+            cum_returns = (1 + ret).cumprod()
+            rolling_max = cum_returns.expanding().max()
+            drawdowns = (cum_returns - rolling_max) / rolling_max
+            max_drawdown = drawdowns.min()
+            
+            calmar = abs(252 * mean_return / (max_drawdown or -1e-6))
+            
+            metrics[name] = {
+                'Sharpe': np.clip(sharpe, -100, 100),
+                'Sortino': np.clip(sortino, -100, 100),
+                'Calmar': np.clip(calmar, -100, 100),
+                'Max Drawdown': max_drawdown,
+                'Returns': cum_returns
+            }
+        
+        return metrics
+        
+    except Exception as e:
+        st.error(f"Error in metrics calculation: {e}")
         return None
-        
-    returns = portfolio_data.filter(like='Close').pct_change()
-    returns.columns = [col.replace('_Close', '') for col in returns.columns]
-    portfolio_return = (returns * weights).sum(axis=1)
-    
-    mean_return = portfolio_return.mean()
-    std_return = portfolio_return.std()
-    
-    if std_return == 0:
-        std_return = 1e-6
-        
-    sharpe = np.sqrt(252) * (mean_return - risk_free_rate/252) / std_return
-    
-    downside_returns = portfolio_return[portfolio_return < 0]
-    downside_std = downside_returns.std() or 1e-6
-    sortino = np.sqrt(252) * (mean_return - risk_free_rate/252) / downside_std
-    
-    cum_returns = (1 + portfolio_return).cumprod()
-    rolling_max = cum_returns.expanding().max()
-    drawdowns = (cum_returns - rolling_max) / rolling_max
-    max_drawdown = drawdowns.min()
-    
-    calmar = abs(252 * mean_return / (max_drawdown or -1e-6))
-    
-    return {
-        'Sharpe': np.clip(sharpe, -100, 100),
-        'Sortino': np.clip(sortino, -100, 100),
-        'Calmar': np.clip(calmar, -100, 100),
-        'Max Drawdown': max_drawdown,
-        'Returns': cum_returns
-    }
 
 # Main app
 st.set_page_config(page_title="Trading Platform V2", layout="wide")
@@ -155,25 +204,32 @@ if portfolio_data is not None and not portfolio_data.empty:
     with tab2:
         metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
         if metrics:
+            columns = ['Portfolio']
+            if 'SPY' in metrics:
+                columns.extend(['SPY', 'URTH'])
+                
             metrics_df = pd.DataFrame({
                 'Metric': ['Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Max Drawdown'],
-                'Value': [
-                    f"{metrics['Sharpe']:.2f}",
-                    f"{metrics['Sortino']:.2f}",
-                    f"{metrics['Calmar']:.2f}",
-                    f"{metrics['Max Drawdown']:.2%}"
-                ]
+                **{col: [
+                    f"{metrics[col]['Sharpe']:.2f}",
+                    f"{metrics[col]['Sortino']:.2f}",
+                    f"{metrics[col]['Calmar']:.2f}",
+                    f"{metrics[col]['Max Drawdown']:.2%}"
+                ] for col in columns}
             })
+            
             st.dataframe(metrics_df)
             
             fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=metrics['Returns'].index,
-                y=metrics['Returns'],
-                name='Portfolio'
-            ))
+            for col in columns:
+                fig.add_trace(go.Scatter(
+                    x=metrics[col]['Returns'].index,
+                    y=metrics[col]['Returns'],
+                    name=col
+                ))
+            
             fig.update_layout(
-                title="Portfolio Performance",
+                title="Performance Comparison",
                 xaxis_title="Date",
                 yaxis_title="Cumulative Return",
                 height=500,
