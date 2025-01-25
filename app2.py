@@ -46,26 +46,39 @@ def hierarchical_risk_parity(returns):
         if returns.empty:
             raise ValueError("No hay datos suficientes en los retornos.")
 
-        # Calcular correlación y manejar valores inválidos
+        # Calcular la matriz de correlación
         corr = returns.corr().fillna(0)
-        dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
+        dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))  # Convertir la correlación en distancias
 
-        # Verificar matriz de distancias
-        if (dist == 0).all().all():
+        # Verificar que la matriz de distancias no esté vacía
+        if dist.isna().all().all():
             raise ValueError("Matriz de distancias no válida.")
 
-        link = linkage(squareform(dist), method='ward')
+        # Crear la matriz de distancias
+        dist_matrix = squareform(dist)
+        
+        # Realizar el clustering jerárquico
+        link = linkage(dist_matrix, method='ward')
+
+        # Organizar los activos de acuerdo con el árbol jerárquico
         sort_ix = quasi_diag(link)
         sorted_returns = returns.iloc[:, sort_ix]
 
+        # Asignación de pesos usando la varianza de cada activo
         var = sorted_returns.var().replace(0, np.finfo(float).eps)
-        weights = 1 / var
-        weights = weights / weights.sum()
+        weights = 1 / var  # Inverso de la varianza
+        weights = weights / weights.sum()  # Normalizar para que la suma sea 1
+
         return pd.Series(weights, index=sorted_returns.columns)
 
     except Exception as e:
         st.error(f"Error in HRP: {e}")
         return pd.Series({col: 1.0 / len(returns.columns) for col in returns.columns})
+
+    except Exception as e:
+        st.error(f"Error in HRP: {e}")
+        return pd.Series({col: 1.0 / len(returns.columns) for col in returns.columns})
+
 # Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
     try:
