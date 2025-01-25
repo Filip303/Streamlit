@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 import ta
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
+import warnings
+warnings.filterwarnings('ignore')
 
 def get_portfolio_data(tickers, period, interval):
     portfolio_data = pd.DataFrame()
@@ -25,33 +27,24 @@ def get_portfolio_data(tickers, period, interval):
 
 def hierarchical_risk_parity(returns):
     try:
-        # Clean and prepare data
         returns = returns.replace([np.inf, -np.inf], np.nan)
-        returns = returns.fillna(method='ffill').fillna(method='bfill')
+        returns = returns.ffill().bfill()
         
         if returns.empty or returns.isna().all().all():
             raise ValueError("Insufficient data for calculation")
         
-        # Calculate correlation and distance matrices
         corr = returns.corr()
         dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
         dist = np.nan_to_num(dist, nan=0.0)
         
-        # Perform hierarchical clustering
         link = linkage(squareform(dist), method='ward')
-        
-        # Get clustered index
         clustered_index = returns.columns[quasi_diag(link)]
         
-        # Calculate inverse variance weights
         variances = returns[clustered_index].var()
         variances = variances.replace(0, np.finfo(float).eps)
         inv_var_weights = 1 / variances
-        
-        # Normalize weights
         weights = inv_var_weights / inv_var_weights.sum()
         
-        # Create final weights series with original column names
         weights_series = pd.Series(weights.values, index=clustered_index)
         
         if weights_series.isna().any():
@@ -61,22 +54,19 @@ def hierarchical_risk_parity(returns):
         
     except Exception as e:
         st.error(f"Error in HRP: {e}")
-        equal_weights = pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
-        return equal_weights
+        return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
 
 def quasi_diag(link):
     link = link.astype(int)
     num_items = link[-1, 3]
     sort_ix = []
-    curr_index = link[-1, 0]  # Start with first index from last row
+    curr_index = link[-1, 0]
     
     while len(sort_ix) < num_items:
         if curr_index < num_items:
             sort_ix.append(curr_index)
         else:
-            # Find the row where this index was created
             row = link[curr_index - num_items]
-            # Add its components to the stack
             sort_ix.extend([row[1], row[0]])
         if len(sort_ix) < num_items:
             curr_index = sort_ix.pop()
@@ -109,15 +99,12 @@ def calculate_technical_indicators(df, symbol):
     low = df[f'{symbol}_Low']
     volume = df[f'{symbol}_Volume']
     
-    # Basic indicators
-    df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
-        high=high, low=low, close=close, volume=volume)
+    df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(high=high, low=low, close=close, volume=volume)
     df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close, window=20)
     df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(close, window=50)
     df[f'{symbol}_SMA20'] = close.rolling(window=20).mean()
     df[f'{symbol}_SMA50'] = close.rolling(window=50).mean()
     
-    # Additional indicators
     df[f'{symbol}_RSI'] = ta.momentum.rsi(close)
     df[f'{symbol}_MACD'] = ta.trend.macd_diff(close)
     df[f'{symbol}_BB_upper'] = ta.volatility.bollinger_hband(close)
@@ -127,18 +114,16 @@ def calculate_technical_indicators(df, symbol):
     df[f'{symbol}_OBV'] = ta.volume.on_balance_volume(close, volume)
     df[f'{symbol}_ATR'] = ta.volatility.average_true_range(high, low, close)
     
-    return df.fillna(method='ffill').fillna(method='bfill')
+    return df.ffill().bfill()
 
 def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
     try:
         metrics = {}
         
-        # Portfolio returns
         returns = portfolio_data.filter(like='Close').pct_change()
         returns.columns = [col.replace('_Close', '') for col in returns.columns]
         portfolio_return = (returns * weights).sum(axis=1)
         
-        # Get benchmark data
         benchmark_data = get_benchmark_data(period, interval)
         benchmark_returns = benchmark_data.pct_change() if benchmark_data is not None else None
         
@@ -177,9 +162,8 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
         return None
 
 # Main app
-st.set_page_config(page_title="Trading Platform V2", layout="wide")
+st.set_page_config(page_title="Trading Platform", layout="wide")
 
-# Sidebar configuration
 with st.sidebar:
     symbols_input = st.text_input("Symbols (comma separated)", "AAPL,MSFT,GOOGL")
     symbols = [s.strip() for s in symbols_input.split(",")]
@@ -196,7 +180,6 @@ with st.sidebar:
     ]
     selected_indicators = st.multiselect("Technical Indicators", available_indicators)
 
-# Get data
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
@@ -261,7 +244,6 @@ if portfolio_data is not None and not portfolio_data.empty:
         selected_symbol = st.selectbox("Select Asset", symbols)
         technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
         
-        # Main price chart
         fig = go.Figure()
         
         if chart_type == 'Candlestick':
@@ -315,7 +297,6 @@ if portfolio_data is not None and not portfolio_data.empty:
         )
         st.plotly_chart(fig, use_container_width=True)
         
-        # Separate charts for indicators
         for indicator in selected_indicators:
             if indicator in ['RSI', 'MACD', 'ADX', 'OBV', 'ATR']:
                 indicator_fig = go.Figure()
@@ -336,28 +317,26 @@ if portfolio_data is not None and not portfolio_data.empty:
                     indicator_fig.add_hline(y=70, line_dash="dash", line_color="red")
                     indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
                 
-                st.plotly_chart(indicator_fig, use_container_width, use_container_width=True)
-
-# Trading Panel
-st.subheader("Trading Panel")
-col1, col2 = st.columns(2)
-
-with col1:
-    operation = st.radio("Operation Type", ["Buy", "Sell"])
-    quantity = st.number_input("Quantity", min_value=1, value=1)
-
-with col2:
-    price = st.number_input("Price",
-                          min_value=0.01,
-                          value=float(technical_data[f'{selected_symbol}_Close'].iloc[-1]),
-                          format="%.2f")
-    
-    total = price * quantity
-    st.write(f"Operation Total: ${total:,.2f}")
-
-if st.button("Execute Order"):
-    st.success(f"{operation} order executed: {quantity} {selected_symbol} at ${price:.2f}")
-    st.write(f"Total: ${total:,.2f}")
+                st.plotly_chart(indicator_fig, use_container_width=True)
+                
+        st.subheader("Trading Panel")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            operation = st.radio("Operation Type", ["Buy", "Sell"])
+            quantity = st.number_input("Quantity", min_value=1, value=1)
+        
+        with col2:
+            price = st.number_input("Price",
+                                  min_value=0.01,
+                                  value=float(technical_data[f'{selected_symbol}_Close'].iloc[-1]),
+                                  format="%.2f")
+            
+            total = price * quantity
+            st.write(f"Operation Total: ${total:,.2f}")
+        
+        if st.button("Execute Order"):st.success(f"{operation} order executed: {quantity} {selected_symbol} at ${price:.2f}")
+            st.write(f"Total: ${total:,.2f}")
 
 if __name__ == "__main__":
     st.sidebar.markdown("---")
