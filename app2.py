@@ -9,36 +9,22 @@ from scipy.spatial.distance import squareform
 import ta
 
 def hierarchical_risk_parity(returns):
-    """
-    Implementa HRP con manejo robusto de datos
-    """
-    # Limpieza de datos
     returns = returns.replace([np.inf, -np.inf], np.nan)
     returns = returns.fillna(method='ffill').fillna(method='bfill')
     
-    # Asegurarse que no hay valores no finitos
     if not np.isfinite(returns).all().all():
         raise ValueError("Hay valores no finitos después de la limpieza")
     
-    # Matriz de correlación con manejo de errores
     corr = returns.corr()
-    
-    # Verificar si la matriz de correlación es válida
     if not np.isfinite(corr).all().all():
         corr = returns.fillna(0).corr()
     
-    # Convertir correlación a distancia con verificación
     dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1)).values
-    
-    # Clustering jerárquico
     link = linkage(squareform(dist, checks=False), 'ward')
-    
-    # Ordenamiento y cálculo de pesos
     sort_ix = quasi_diag(link)
     
-    # Cálculo de pesos más robusto
     var = returns.var()
-    weights = 1/np.clip(var, 1e-6, np.inf)  # Evitar división por cero
+    weights = 1/np.clip(var, 1e-6, np.inf)
     weights = weights/weights.sum()
     
     return pd.Series(weights.values, index=returns.columns)
@@ -46,7 +32,8 @@ def hierarchical_risk_parity(returns):
 def quasi_diag(link):
     link = link.astype(int)
     num_items = link[-1, 3]
-    sort_ix = pd.Series([link[-1, 0], link[-1, 1]])
+    sort_ix = []
+    sort_ix.extend([link[-1, 0], link[-1, 1]])
     
     for i in range(len(link) - 2, -1, -1):
         if link[i, 0] >= num_items:
@@ -54,7 +41,7 @@ def quasi_diag(link):
         elif link[i, 1] >= num_items:
             sort_ix.append(link[i, 0])
     
-    return sort_ix.map(lambda x: x if x < num_items else None).dropna()
+    return np.array([x for x in sort_ix if x < num_items])
 
 @st.cache_data
 def get_portfolio_data(tickers, period, interval):
@@ -79,17 +66,16 @@ def get_portfolio_data(tickers, period, interval):
         return None, None
 
 def calculate_metrics(portfolio_data, weights):
-    """Calcula métricas con manejo robusto de errores"""
     try:
         returns = portfolio_data.filter(like='Close').pct_change()
         returns = returns.replace([np.inf, -np.inf], np.nan).fillna(0)
         
-        weights_aligned = pd.Series(weights, index=returns.columns)
-        portfolio_return = returns.dot(weights_aligned)
+        weights_dict = {col.replace('_Close', ''): weight 
+                       for col, weight in zip(returns.columns, weights)}
+        portfolio_return = sum(returns[f"{symbol}_Close"] * weights_dict[symbol] 
+                             for symbol in weights_dict.keys())
         
         risk_free_rate = 0.02
-        
-        # Cálculos con manejo de errores
         mean_return = portfolio_return.mean()
         std_return = portfolio_return.std() or 1e-6
         
@@ -106,12 +92,16 @@ def calculate_metrics(portfolio_data, weights):
         
         calmar = abs(252 * mean_return / (max_drawdown or -1e-6))
         
-        return {
+        metrics = {
             'Sharpe': np.clip(sharpe, -100, 100),
             'Sortino': np.clip(sortino, -100, 100),
             'Calmar': np.clip(calmar, -100, 100),
             'Max Drawdown': max_drawdown
         }
+        
+        metrics = {k: 0 if np.isnan(v) else v for k, v in metrics.items()}
+        return metrics
+        
     except Exception as e:
         st.error(f"Error en cálculo de métricas: {e}")
         return {
@@ -122,38 +112,40 @@ def calculate_metrics(portfolio_data, weights):
         }
 
 def calculate_technical_indicators(df, symbol):
-    """Calcula indicadores técnicos con manejo de errores"""
     try:
         df = df.copy()
+        df = df.sort_index()
+        
         close_price = df[f'{symbol}_Close']
         volume = df[f'{symbol}_Volume']
         
-        df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
-            high=close_price, 
-            low=close_price, 
-            close=close_price, 
-            volume=volume
-        )
+        try:
+            df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
+                high=close_price, 
+                low=close_price, 
+                close=close_price, 
+                volume=volume,
+                window=14
+            )
+        except:
+            df[f'{symbol}_VWAP'] = close_price.rolling(window=14).mean()
         
         df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close_price, window=20)
         df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(close_price, window=50)
-        df[f'{symbol}_SMA20'] = ta.trend.sma_indicator(close_price, window=20)
-        df[f'{symbol}_SMA50'] = ta.trend.sma_indicator(close_price, window=50)
+        df[f'{symbol}_SMA20'] = close_price.rolling(window=20).mean()
+        df[f'{symbol}_SMA50'] = close_price.rolling(window=50).mean()
         
-        # Limpiar NaN y valores infinitos
-        for col in df.columns:
-            df[col] = df[col].replace([np.inf, -np.inf], np.nan).fillna(method='ffill')
+        df = df.fillna(method='ffill').fillna(method='bfill')
         
         return df
+        
     except Exception as e:
         st.error(f"Error en cálculo de indicadores técnicos: {e}")
         return df
 
-# Configuración de la página
 st.set_page_config(page_title="Plataforma de Trading Avanzada", layout="wide")
 st.title("📈 Plataforma de Trading Avanzada")
 
-# Sidebar para configuración
 with st.sidebar:
     st.header("Configuración")
     symbols_input = st.text_input("Símbolos (separados por coma)", value="AAPL,MSFT,GOOGL,AMZN")
@@ -171,23 +163,19 @@ with st.sidebar:
         index=0
     )
 
-# Obtener datos
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
-    # Preparar datos para HRP
     close_cols = [col for col in portfolio_data.columns if col.endswith('_Close')]
     returns = portfolio_data[close_cols].pct_change().dropna()
     returns.columns = [col.replace('_Close', '') for col in returns.columns]
     
-    # Calcular pesos usando HRP con manejo de errores
     try:
         weights = hierarchical_risk_parity(returns)
     except Exception as e:
         st.error(f"Error en el cálculo de HRP: {e}")
         weights = pd.Series({symbol: 1/len(symbols) for symbol in symbols})
     
-    # Crear pestañas
     tab1, tab2, tab3 = st.tabs(["Análisis de Cartera", "Métricas de Rendimiento", "Análisis Técnico"])
     
     with tab1:
@@ -214,7 +202,6 @@ if portfolio_data is not None and not portfolio_data.empty:
         with col4:
             st.metric("Max Drawdown", f"{metrics['Max Drawdown']:.2%}")
         
-        # Cálculo de retornos de la cartera
         close_prices = portfolio_data.filter(like='Close')
         close_prices.columns = [col.replace('_Close', '') for col in close_prices.columns]
         portfolio_returns = (close_prices.pct_change() * weights).sum(axis=1)
@@ -244,19 +231,10 @@ if portfolio_data is not None and not portfolio_data.empty:
                                y=technical_data[f'{selected_symbol}_VWAP'],
                                name='VWAP'))
         
-        fig.add_trace(go.Scatter(x=technical_data.index,
-                               y=technical_data[f'{selected_symbol}_EMA20'],
-                               name='EMA 20'))
-        fig.add_trace(go.Scatter(x=technical_data.index,
-                               y=technical_data[f'{selected_symbol}_EMA50'],
-                               name='EMA 50'))
-        
-        fig.add_trace(go.Scatter(x=technical_data.index,
-                               y=technical_data[f'{selected_symbol}_SMA20'],
-                               name='SMA 20'))
-        fig.add_trace(go.Scatter(x=technical_data.index,
-                               y=technical_data[f'{selected_symbol}_SMA50'],
-                               name='SMA 50'))
+        for indicator in ['EMA20', 'EMA50', 'SMA20', 'SMA50']:
+            fig.add_trace(go.Scatter(x=technical_data.index,
+                                   y=technical_data[f'{selected_symbol}_{indicator}'],
+                                   name=indicator))
         
         fig.update_layout(title=f"Análisis Técnico - {selected_symbol}",
                          xaxis_title="Fecha",
@@ -276,12 +254,11 @@ if portfolio_data is not None and not portfolio_data.empty:
         
         st.dataframe(df_display)
         
-        # Señales de trading con manejo de NaN
         df_display['Señal'] = 'Mantener'
-        df_display.loc[technical_data[f'{selected_symbol}_EMA20'].fillna(0) > 
-                      technical_data[f'{selected_symbol}_EMA50'].fillna(0), 'Señal'] = 'Comprar'
-        df_display.loc[technical_data[f'{selected_symbol}_EMA20'].fillna(0) < 
-                      technical_data[f'{selected_symbol}_EMA50'].fillna(0), 'Señal'] = 'Vender'
+        df_display.loc[technical_data[f'{selected_symbol}_EMA20'] > 
+                      technical_data[f'{selected_symbol}_EMA50'], 'Señal'] = 'Comprar'
+        df_display.loc[technical_data[f'{selected_symbol}_EMA20'] < 
+                      technical_data[f'{selected_symbol}_EMA50'], 'Señal'] = 'Vender'
         
         st.subheader("Señales de Trading")
         latest_signal = df_display['Señal'].iloc[-1]
