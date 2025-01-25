@@ -37,7 +37,6 @@ def quasi_diag(link):
             sort_ix.append(link[i, 0])
     return np.array([x for x in sort_ix if x < num_items])
 
-# Función para calcular el HRP
 def hierarchical_risk_parity(returns):
     try:
         # Limpieza de datos: reemplazar infinitos y NaN
@@ -87,7 +86,7 @@ def hierarchical_risk_parity(returns):
         st.error(f"Error in HRP: {e}")
         # En caso de error, asignar pesos iguales a todos los activos
         return pd.Series({col: 1.0 / len(returns.columns) for col in returns.columns})
-
+        
 # Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
     try:
