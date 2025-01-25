@@ -51,6 +51,10 @@ def hierarchical_risk_parity(returns):
         # Calcular la matriz de correlación
         corr = returns.corr()
         
+        # Verificar si la matriz de correlación es válida
+        if corr.isna().any().any():
+            raise ValueError("Correlation matrix contains NaN values")
+        
         # Calcular la matriz de distancias
         dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
         dist = np.nan_to_num(dist, nan=0.0)
