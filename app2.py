@@ -8,6 +8,7 @@ import ta
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 
+# Función para obtener datos del portafolio
 def get_portfolio_data(tickers, period, interval):
     portfolio_data = pd.DataFrame()
     info_dict = {}
@@ -23,6 +24,7 @@ def get_portfolio_data(tickers, period, interval):
             st.warning(f"Error getting data for {ticker}: {e}")
     return portfolio_data, info_dict
 
+# Función para ordenar los activos en la estructura jerárquica
 def quasi_diag(link):
     link = link.astype(int)
     sort_ix = []
@@ -35,29 +37,43 @@ def quasi_diag(link):
             sort_ix.append(link[i, 0])
     return np.array([x for x in sort_ix if x < num_items])
 
+# Función para calcular el HRP
 def hierarchical_risk_parity(returns):
     try:
+        # Limpieza de datos: reemplazar infinitos y NaN
         returns = returns.replace([np.inf, -np.inf], np.nan)
         returns = returns.fillna(method='ffill').fillna(method='bfill')
         
+        # Verificar si hay suficientes datos
         if returns.empty or returns.isna().all().all():
             raise ValueError("Insufficient data for calculation")
         
+        # Calcular la matriz de correlación
         corr = returns.corr()
+        
+        # Calcular la matriz de distancias
         dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
         dist = np.nan_to_num(dist, nan=0.0)
         
+        # Construir la estructura jerárquica usando linkage
         link = linkage(squareform(dist), method='ward')
+        
+        # Ordenar los activos usando quasi_diag
         sort_ix = quasi_diag(link)
-        
         sorted_returns = returns.iloc[:, sort_ix]
-        var = sorted_returns.var()
-        var = var.replace(0, np.finfo(float).eps)
-        weights = 1/var
-        weights = weights/weights.sum()
         
+        # Calcular la varianza de los rendimientos ordenados
+        var = sorted_returns.var()
+        var = var.replace(0, np.finfo(float).eps)  # Evitar divisiones por cero
+        
+        # Calcular los pesos iniciales
+        weights = 1 / var
+        weights = weights / weights.sum()  # Normalizar los pesos
+        
+        # Crear una serie de pesos con los nombres de los activos
         weights_series = pd.Series(weights, index=sorted_returns.columns)
         
+        # Verificar que los pesos sean válidos
         if not weights_series.isna().any():
             return weights_series
         else:
@@ -65,8 +81,10 @@ def hierarchical_risk_parity(returns):
             
     except Exception as e:
         st.error(f"Error in HRP: {e}")
-        return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
+        # En caso de error, asignar pesos iguales a todos los activos
+        return pd.Series({col: 1.0 / len(returns.columns) for col in returns.columns})
 
+# Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
     try:
         benchmarks = ['SPY', 'URTH']
@@ -83,6 +101,7 @@ def get_benchmark_data(period, interval):
         st.error(f"Error getting benchmark data: {e}")
         return None
 
+# Función para calcular indicadores técnicos
 def calculate_technical_indicators(df, symbol):
     if df is None or df.empty:
         return pd.DataFrame()
@@ -93,7 +112,7 @@ def calculate_technical_indicators(df, symbol):
     low = df[f'{symbol}_Low']
     volume = df[f'{symbol}_Volume']
     
-    # Basic indicators
+    # Indicadores básicos
     df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
         high=high, low=low, close=close, volume=volume)
     df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close, window=20)
@@ -101,7 +120,7 @@ def calculate_technical_indicators(df, symbol):
     df[f'{symbol}_SMA20'] = close.rolling(window=20).mean()
     df[f'{symbol}_SMA50'] = close.rolling(window=50).mean()
     
-    # Additional indicators
+    # Indicadores adicionales
     df[f'{symbol}_RSI'] = ta.momentum.rsi(close)
     df[f'{symbol}_MACD'] = ta.trend.macd_diff(close)
     df[f'{symbol}_BB_upper'] = ta.volatility.bollinger_hband(close)
@@ -113,16 +132,17 @@ def calculate_technical_indicators(df, symbol):
     
     return df.fillna(method='ffill').fillna(method='bfill')
 
+# Función para calcular métricas del portafolio
 def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
     try:
         metrics = {}
         
-        # Portfolio returns
+        # Rendimientos del portafolio
         returns = portfolio_data.filter(like='Close').pct_change()
         returns.columns = [col.replace('_Close', '') for col in returns.columns]
         portfolio_return = (returns * weights).sum(axis=1)
         
-        # Get benchmark data
+        # Obtener datos de benchmarks
         benchmark_data = get_benchmark_data(period, interval)
         benchmark_returns = benchmark_data.pct_change() if benchmark_data is not None else None
         
@@ -160,10 +180,10 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
         st.error(f"Error in metrics calculation: {e}")
         return None
 
-# Main app
+# Configuración de la página
 st.set_page_config(page_title="Trading Platform V2", layout="wide")
 
-# Sidebar configuration
+# Configuración de la barra lateral
 with st.sidebar:
     symbols_input = st.text_input("Symbols (comma separated)", "AAPL,MSFT,GOOGL")
     symbols = [s.strip() for s in symbols_input.split(",")]
@@ -180,7 +200,7 @@ with st.sidebar:
     ]
     selected_indicators = st.multiselect("Technical Indicators", available_indicators)
 
-# Get data
+# Obtener datos del portafolio
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
@@ -245,7 +265,7 @@ if portfolio_data is not None and not portfolio_data.empty:
         selected_symbol = st.selectbox("Select Asset", symbols)
         technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
         
-        # Main price chart
+        # Gráfico principal de precios
         fig = go.Figure()
         
         if chart_type == 'Candlestick':
@@ -299,7 +319,7 @@ if portfolio_data is not None and not portfolio_data.empty:
         )
         st.plotly_chart(fig, use_container_width=True)
         
-        # Separate charts for indicators
+        # Gráficos separados para indicadores
         for indicator in selected_indicators:
             if indicator in ['RSI', 'MACD', 'ADX', 'OBV', 'ATR']:
                 indicator_fig = go.Figure()
@@ -322,6 +342,7 @@ if portfolio_data is not None and not portfolio_data.empty:
                 
                 st.plotly_chart(indicator_fig, use_container_width=True)
 
+# Mensaje en la barra lateral
 if __name__ == "__main__":
     st.sidebar.markdown("---")
     st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")
