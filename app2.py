@@ -37,7 +37,7 @@ def quasi_diag(link):
             sort_ix.append(link[i, 0])
     return np.array([x for x in sort_ix if x < num_items])
 
- Función para calcular los pesos HRP
+ # Función para calcular los pesos HRP
 def hierarchical_risk_parity(returns):
     # Calcular matriz de correlación
     corr = returns.corr()
