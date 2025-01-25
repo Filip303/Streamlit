@@ -320,9 +320,93 @@ if portfolio_data is not None and not portfolio_data.empty:
 
 if __name__ == "__main__":
     st.sidebar.markdown("---")
+    st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")upper', 'middle', 'lower']:
+                    fig.add_trace(go.Scatter(
+                        x=technical_data.index,
+                        y=technical_data[f'{selected_symbol}_BB_{band}'],
+                        name=f'BB {band}',
+                        line=dict(dash='dot')
+                    ))
+                    
+        fig.update_layout(
+            title=f"Technical Analysis - {selected_symbol}",
+            xaxis_title="Date",
+            yaxis_title="Price",
+            height=600,
+            yaxis_type='log' if use_log else 'linear'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Separate charts for other indicators
+        for indicator in selected_indicators:
+            if indicator in ['RSI', 'MACD', 'ADX', 'OBV', 'ATR']:
+                indicator_fig = go.Figure()
+                indicator_fig.add_trace(go.Scatter(
+                    x=technical_data.index,
+                    y=technical_data[f'{selected_symbol}_{indicator}'],
+                    name=indicator
+                ))
+                
+                indicator_fig.update_layout(
+                    title=f"{indicator} - {selected_symbol}",
+                    xaxis_title="Date",
+                    yaxis_title=indicator,
+                    height=300
+                )
+                
+                if indicator == 'RSI':
+                    indicator_fig.add_hline(y=70, line_dash="dash", line_color="red")
+                    indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
+                
+                st.plotly_chart(indicator_fig, use_container_width=True)
+
+if __name__ == "__main__":
+    st.sidebar.markdown("---")
     st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")
             elif indicator == 'Bollinger Bands':
                 for band in ['upper', 'middle', 'lower']:
+                    fig.add_trace(go.Scatter(
+                        x=technical_data.index,
+                        y=technical_data[f'{selected_symbol}_BB_{band}'],
+                        name=f'BB {band}',
+                        line=dict(dash='dot')
+                    ))
+                    
+        fig.update_layout(
+            title=f"Technical Analysis - {selected_symbol}",
+            xaxis_title="Date",
+            yaxis_title="Price",
+            height=600,
+            yaxis_type='log' if use_log else 'linear'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Separate charts for other indicators
+        for indicator in selected_indicators:
+            if indicator in ['RSI', 'MACD', 'ADX', 'OBV', 'ATR']:
+                indicator_fig = go.Figure()
+                indicator_fig.add_trace(go.Scatter(
+                    x=technical_data.index,
+                    y=technical_data[f'{selected_symbol}_{indicator}'],
+                    name=indicator
+                ))
+                
+                indicator_fig.update_layout(
+                    title=f"{indicator} - {selected_symbol}",
+                    xaxis_title="Date",
+                    yaxis_title=indicator,
+                    height=300
+                )
+                
+                if indicator == 'RSI':
+                    indicator_fig.add_hline(y=70, line_dash="dash", line_color="red")
+                    indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
+                
+                st.plotly_chart(indicator_fig, use_container_width=True)
+
+if __name__ == "__main__":
+    st.sidebar.markdown("---")
+    st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")upper', 'middle', 'lower']:
                     fig.add_trace(go.Scatter(
                         x=technical_data.index,
                         y=technical_data[f'{selected_symbol}_BB_{band}'],
