@@ -9,22 +9,35 @@ from scipy.spatial.distance import squareform
 import ta
 
 def hierarchical_risk_parity(returns):
+    # Preparación y limpieza de datos
     returns = returns.replace([np.inf, -np.inf], np.nan)
     returns = returns.fillna(method='ffill').fillna(method='bfill')
     
-    if not np.isfinite(returns).all().all():
-        raise ValueError("Hay valores no finitos después de la limpieza")
+    # Verificar datos finitos
+    if not returns.notna().all().all():
+        returns = returns.fillna(returns.mean())
     
+    # Matriz de correlación
     corr = returns.corr()
-    if not np.isfinite(corr).all().all():
-        corr = returns.fillna(0).corr()
     
-    dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1)).values
-    link = linkage(squareform(dist, checks=False), 'ward')
+    # Convertir correlación a distancia con validación
+    dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
+    dist = np.nan_to_num(dist, nan=0.0)
+    
+    # Verificar que la matriz es válida
+    if not np.isfinite(dist).all():
+        raise ValueError("Matriz de distancia contiene valores no finitos")
+    
+    # Clustering jerárquico
+    link = linkage(squareform(dist), method='ward')
+    
+    # Ordenamiento y cálculo de pesos
     sort_ix = quasi_diag(link)
     
+    # Cálculo de pesos con manejo de errores
     var = returns.var()
-    weights = 1/np.clip(var, 1e-6, np.inf)
+    var = var.replace(0, np.finfo(float).eps)  # Reemplazar ceros con epsilon
+    weights = 1/var
     weights = weights/weights.sum()
     
     return pd.Series(weights.values, index=returns.columns)
