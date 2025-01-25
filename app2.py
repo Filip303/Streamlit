@@ -195,10 +195,14 @@ if portfolio_data is not None and not portfolio_data.empty:
         st.subheader("Portfolio Composition (HRP)")
         weights_df = pd.DataFrame({'Asset': weights.index, 'Weight': weights.values * 100})
         
-        fig = go.Figure(data=[go.Pie(labels=weights_df['Asset'],
-                                   values=weights_df['Weight'],
-                                   textinfo='label+percent')])
-        st.plotly_chart(fig, use_container_width=True)
+        if len(symbols) > 1:
+            fig = go.Figure(data=[go.Pie(labels=weights_df['Asset'],
+                                       values=weights_df['Weight'],
+                                       textinfo='label+percent')])
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Please add more symbols in the sidebar to view portfolio composition")
+        
         st.dataframe(weights_df.round(2))
     
     with tab2:
