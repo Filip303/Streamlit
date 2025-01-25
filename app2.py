@@ -10,45 +10,51 @@ import ta
 
 def hierarchical_risk_parity(returns):
     """
-    Implementa HRP (Hierarchical Risk Parity)
+    Implementa HRP con manejo robusto de datos
     """
-    # Manejo de NaN
+    # Limpieza de datos
+    returns = returns.replace([np.inf, -np.inf], np.nan)
     returns = returns.fillna(method='ffill').fillna(method='bfill')
     
-    # 1. Calcular matriz de correlación
+    # Asegurarse que no hay valores no finitos
+    if not np.isfinite(returns).all().all():
+        raise ValueError("Hay valores no finitos después de la limpieza")
+    
+    # Matriz de correlación con manejo de errores
     corr = returns.corr()
     
-    # 2. Convertir correlación a distancia
-    dist = np.sqrt(0.5 * (1 - corr)).values
+    # Verificar si la matriz de correlación es válida
+    if not np.isfinite(corr).all().all():
+        corr = returns.fillna(0).corr()
     
-    # 3. Clustering jerárquico
+    # Convertir correlación a distancia con verificación
+    dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1)).values
+    
+    # Clustering jerárquico
     link = linkage(squareform(dist, checks=False), 'ward')
     
-    # 4. Ordenar activos basado en el clustering
-    def quasi_diag(link):
-        link = link.astype(int)
-        sort_ix = pd.Series([link[-1, 0], link[-1, 1]])
-        num_items = link[-1, 3]
-        
-        for i in range(len(link) - 2, -1, -1):
-            if link[i, 0] >= num_items:
-                sort_ix.append(link[i, 1])
-            elif link[i, 1] >= num_items:
-                sort_ix.append(link[i, 0])
-                
-        return sort_ix.map(lambda x: x if x < num_items else None).dropna()
-    
+    # Ordenamiento y cálculo de pesos
     sort_ix = quasi_diag(link)
     
-    # 5. Calcular pesos mediante varianza inversa
+    # Cálculo de pesos más robusto
     var = returns.var()
-    weights = 1/var
+    weights = 1/np.clip(var, 1e-6, np.inf)  # Evitar división por cero
     weights = weights/weights.sum()
     
-    # 6. Redistribuir pesos según clusters
-    sorted_weights = weights[sort_ix.astype(int)]
-    weights_dict = pd.Series(sorted_weights.values, index=returns.columns[sort_ix.astype(int)])
-    return weights_dict
+    return pd.Series(weights.values, index=returns.columns)
+
+def quasi_diag(link):
+    link = link.astype(int)
+    num_items = link[-1, 3]
+    sort_ix = pd.Series([link[-1, 0], link[-1, 1]])
+    
+    for i in range(len(link) - 2, -1, -1):
+        if link[i, 0] >= num_items:
+            sort_ix.append(link[i, 1])
+        elif link[i, 1] >= num_items:
+            sort_ix.append(link[i, 0])
+    
+    return sort_ix.map(lambda x: x if x < num_items else None).dropna()
 
 @st.cache_data
 def get_portfolio_data(tickers, period, interval):
@@ -73,32 +79,37 @@ def get_portfolio_data(tickers, period, interval):
         return None, None
 
 def calculate_metrics(portfolio_data, weights):
-    """Calcula métricas de rendimiento"""
+    """Calcula métricas con manejo robusto de errores"""
     try:
-        returns = portfolio_data.filter(like='Close').pct_change().fillna(0)
-        # Convertir weights a la misma estructura que returns
+        returns = portfolio_data.filter(like='Close').pct_change()
+        returns = returns.replace([np.inf, -np.inf], np.nan).fillna(0)
+        
         weights_aligned = pd.Series(weights, index=returns.columns)
         portfolio_return = returns.dot(weights_aligned)
         
         risk_free_rate = 0.02
-        # Sharpe Ratio
-        sharpe = np.sqrt(252) * (portfolio_return.mean() - risk_free_rate/252) / portfolio_return.std()
         
-        # Sortino Ratio
+        # Cálculos con manejo de errores
+        mean_return = portfolio_return.mean()
+        std_return = portfolio_return.std() or 1e-6
+        
+        sharpe = np.sqrt(252) * (mean_return - risk_free_rate/252) / std_return
+        
         downside_returns = portfolio_return[portfolio_return < 0]
-        sortino = np.sqrt(252) * (portfolio_return.mean() - risk_free_rate/252) / (downside_returns.std() or 1e-6)
+        downside_std = downside_returns.std() or 1e-6
+        sortino = np.sqrt(252) * (mean_return - risk_free_rate/252) / downside_std
         
-        # Drawdown y Calmar Ratio
         cum_returns = (1 + portfolio_return).cumprod()
         rolling_max = cum_returns.expanding().max()
         drawdowns = (cum_returns - rolling_max) / rolling_max
         max_drawdown = drawdowns.min()
-        calmar = (-252 * portfolio_return.mean() / (max_drawdown or -1e-6)) if max_drawdown != 0 else np.inf
+        
+        calmar = abs(252 * mean_return / (max_drawdown or -1e-6))
         
         return {
-            'Sharpe': sharpe,
-            'Sortino': sortino,
-            'Calmar': calmar,
+            'Sharpe': np.clip(sharpe, -100, 100),
+            'Sortino': np.clip(sortino, -100, 100),
+            'Calmar': np.clip(calmar, -100, 100),
             'Max Drawdown': max_drawdown
         }
     except Exception as e:
@@ -111,7 +122,7 @@ def calculate_metrics(portfolio_data, weights):
         }
 
 def calculate_technical_indicators(df, symbol):
-    """Calcula indicadores técnicos"""
+    """Calcula indicadores técnicos con manejo de errores"""
     try:
         df = df.copy()
         close_price = df[f'{symbol}_Close']
@@ -128,6 +139,10 @@ def calculate_technical_indicators(df, symbol):
         df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(close_price, window=50)
         df[f'{symbol}_SMA20'] = ta.trend.sma_indicator(close_price, window=20)
         df[f'{symbol}_SMA50'] = ta.trend.sma_indicator(close_price, window=50)
+        
+        # Limpiar NaN y valores infinitos
+        for col in df.columns:
+            df[col] = df[col].replace([np.inf, -np.inf], np.nan).fillna(method='ffill')
         
         return df
     except Exception as e:
@@ -165,7 +180,7 @@ if portfolio_data is not None and not portfolio_data.empty:
     returns = portfolio_data[close_cols].pct_change().dropna()
     returns.columns = [col.replace('_Close', '') for col in returns.columns]
     
-    # Calcular pesos usando HRP
+    # Calcular pesos usando HRP con manejo de errores
     try:
         weights = hierarchical_risk_parity(returns)
     except Exception as e:
@@ -261,9 +276,12 @@ if portfolio_data is not None and not portfolio_data.empty:
         
         st.dataframe(df_display)
         
+        # Señales de trading con manejo de NaN
         df_display['Señal'] = 'Mantener'
-        df_display.loc[technical_data[f'{selected_symbol}_EMA20'] > technical_data[f'{selected_symbol}_EMA50'], 'Señal'] = 'Comprar'
-        df_display.loc[technical_data[f'{selected_symbol}_EMA20'] < technical_data[f'{selected_symbol}_EMA50'], 'Señal'] = 'Vender'
+        df_display.loc[technical_data[f'{selected_symbol}_EMA20'].fillna(0) > 
+                      technical_data[f'{selected_symbol}_EMA50'].fillna(0), 'Señal'] = 'Comprar'
+        df_display.loc[technical_data[f'{selected_symbol}_EMA20'].fillna(0) < 
+                      technical_data[f'{selected_symbol}_EMA50'].fillna(0), 'Señal'] = 'Vender'
         
         st.subheader("Señales de Trading")
         latest_signal = df_display['Señal'].iloc[-1]
