@@ -320,6 +320,12 @@ if portfolio_data is not None and not portfolio_data.empty:
 
 if __name__ == "__main__":
     st.sidebar.markdown("---")
+    st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")")
+                
+                st.plotly_chart(indicator_fig, use_container_width=True)
+
+if __name__ == "__main__":
+    st.sidebar.markdown("---")
     st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")upper', 'middle', 'lower']:
                     fig.add_trace(go.Scatter(
                         x=technical_data.index,
@@ -357,6 +363,12 @@ if __name__ == "__main__":
                 if indicator == 'RSI':
                     indicator_fig.add_hline(y=70, line_dash="dash", line_color="red")
                     indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
+                
+                st.plotly_chart(indicator_fig, use_container_width=True)
+
+if __name__ == "__main__":
+    st.sidebar.markdown("---")
+    st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")")
                 
                 st.plotly_chart(indicator_fig, use_container_width=True)
 
@@ -406,6 +418,12 @@ if __name__ == "__main__":
 
 if __name__ == "__main__":
     st.sidebar.markdown("---")
+    st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")")
+                
+                st.plotly_chart(indicator_fig, use_container_width=True)
+
+if __name__ == "__main__":
+    st.sidebar.markdown("---")
     st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")upper', 'middle', 'lower']:
                     fig.add_trace(go.Scatter(
                         x=technical_data.index,
@@ -443,6 +461,12 @@ if __name__ == "__main__":
                 if indicator == 'RSI':
                     indicator_fig.add_hline(y=70, line_dash="dash", line_color="red")
                     indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
+                
+                st.plotly_chart(indicator_fig, use_container_width=True)
+
+if __name__ == "__main__":
+    st.sidebar.markdown("---")
+    st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")")
                 
                 st.plotly_chart(indicator_fig, use_container_width=True)
 
