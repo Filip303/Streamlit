@@ -173,6 +173,31 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
         st.error(f"Error in metrics calculation: {e}")
         return None
 
+# Función para calcular VaR y CVaR
+def calculate_var_cvar(returns, confidence_level=0.95):
+    """
+    Calcula el VaR (Valor en Riesgo) y CVaR (Valor en Riesgo Condicional) de una serie de rendimientos.
+    :param returns: Serie de rendimientos del portafolio.
+    :param confidence_level: Nivel de confianza para el cálculo (por defecto 95%).
+    :return: Tuple (VaR, CVaR).
+    """
+    if returns.empty:
+        raise ValueError("No hay datos de retornos para calcular VaR y CVaR.")
+    
+    # Ordenar los retornos
+    sorted_returns = returns.sort_values()
+    
+    # Índice para el nivel de confianza
+    var_index = int((1 - confidence_level) * len(sorted_returns))
+    
+    # VaR: percentil correspondiente al nivel de confianza
+    var = sorted_returns.iloc[var_index]
+    
+    # CVaR: media de los valores por debajo del VaR
+    cvar = sorted_returns[sorted_returns <= var].mean()
+    
+    return var, cvar
+    
 # Configuración de la página
 st.set_page_config(page_title="Trading Platform V2", layout="wide")
 
@@ -219,40 +244,41 @@ if portfolio_data is not None and not portfolio_data.empty:
         st.dataframe(weights_df.round(2))
     
     with tab2:
-        metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
-        if metrics:
-            columns = ['Portfolio']
-            if 'SPY' in metrics:
-                columns.extend(['SPY', 'URTH'])
-                
-            metrics_df = pd.DataFrame({
-                'Metric': ['Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Max Drawdown'],
-                **{col: [
-                    f"{metrics[col]['Sharpe']:.2f}",
-                    f"{metrics[col]['Sortino']:.2f}",
-                    f"{metrics[col]['Calmar']:.2f}",
-                    f"{metrics[col]['Max Drawdown']:.2%}"
-                ] for col in columns}
-            })
+    metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
+    if metrics:
+        columns = ['Portfolio']
+        if 'SPY' in metrics:
+            columns.extend(['SPY', 'URTH'])
             
-            st.dataframe(metrics_df)
-            
-            fig = go.Figure()
-            for col in columns:
-                fig.add_trace(go.Scatter(
-                    x=metrics[col]['Returns'].index,
-                    y=metrics[col]['Returns'],
-                    name=col
-                ))
-            
-            fig.update_layout(
-                title="Performance Comparison",
-                xaxis_title="Date",
-                yaxis_title="Cumulative Return",
-                height=500,
-                yaxis_type='log' if use_log else 'linear'
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        metrics_df = pd.DataFrame({
+            'Metric': ['Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Max Drawdown', 'VaR (95%)', 'CVaR (95%)'],
+            **{col: [
+                f"{metrics[col]['Sharpe']:.2f}",
+                f"{metrics[col]['Sortino']:.2f}",
+                f"{metrics[col]['Calmar']:.2f}",
+                f"{metrics[col]['Max Drawdown']:.2%}",
+                *[f"{x:.2%}" for x in calculate_var_cvar(metrics[col]['Returns'], confidence_level=0.95)]
+            ] for col in columns}
+        })
+        
+        st.dataframe(metrics_df)
+        
+        fig = go.Figure()
+        for col in columns:
+            fig.add_trace(go.Scatter(
+                x=metrics[col]['Returns'].index,
+                y=metrics[col]['Returns'],
+                name=col
+            ))
+        
+        fig.update_layout(
+            title="Performance Comparison",
+            xaxis_title="Date",
+            yaxis_title="Cumulative Return",
+            height=500,
+            yaxis_type='log' if use_log else 'linear'
+        )
+        st.plotly_chart(fig, use_container_width=True)
     
     with tab3:
         selected_symbol = st.selectbox("Select Asset", symbols)
