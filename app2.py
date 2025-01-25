@@ -16,14 +16,16 @@ def get_portfolio_data(tickers, period, interval):
         try:
             stock = yf.Ticker(ticker)
             df = stock.history(period=period, interval=interval)
-            if not df.empty:
-                for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
-                    portfolio_data[f"{ticker}_{col}"] = df[col]
-                info_dict[ticker] = stock.info
+            if df.empty or df.isna().all().all():
+                st.warning(f"No data for ticker {ticker}. Skipping.")
+                continue
+            for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+                portfolio_data[f"{ticker}_{col}"] = df[col]
+            info_dict[ticker] = stock.info
         except Exception as e:
             st.warning(f"Error getting data for {ticker}: {e}")
     return portfolio_data, info_dict
-
+    
 # Función para ordenar los activos en la estructura jerárquica
 def quasi_diag(link):
     link = link.astype(int)
@@ -40,54 +42,30 @@ def quasi_diag(link):
 # Función para calcular los pesos HRP
 def hierarchical_risk_parity(returns):
     try:
-        # Limpieza de datos: reemplazar infinitos y NaN
-        returns = returns.replace([np.inf, -np.inf], np.nan)
-        returns = returns.fillna(method='ffill').fillna(method='bfill')
-        
-        # Verificar si hay suficientes datos
-        if returns.empty or returns.isna().all().all():
-            raise ValueError("Insufficient data for calculation")
-        
-        # Calcular la matriz de correlación
-        corr = returns.corr()
-        
-        # Verificar si la matriz de correlación es válida
-        if corr.isna().any().any():
-            raise ValueError("Correlation matrix contains NaN values")
-        
-        # Calcular la matriz de distancias
+        returns = returns.dropna(axis=1, how='all')  # Eliminar columnas con solo NaN
+        if returns.empty:
+            raise ValueError("No hay datos suficientes en los retornos.")
+
+        # Calcular correlación y manejar valores inválidos
+        corr = returns.corr().fillna(0)
         dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
-        dist = np.nan_to_num(dist, nan=0.0)
-        
-        # Construir la estructura jerárquica usando linkage
+
+        # Verificar matriz de distancias
+        if (dist == 0).all().all():
+            raise ValueError("Matriz de distancias no válida.")
+
         link = linkage(squareform(dist), method='ward')
-        
-        # Ordenar los activos usando quasi_diag
         sort_ix = quasi_diag(link)
         sorted_returns = returns.iloc[:, sort_ix]
-        
-        # Calcular la varianza de los rendimientos ordenados
-        var = sorted_returns.var()
-        var = var.replace(0, np.finfo(float).eps)  # Evitar divisiones por cero
-        
-        # Calcular los pesos iniciales
+
+        var = sorted_returns.var().replace(0, np.finfo(float).eps)
         weights = 1 / var
-        weights = weights / weights.sum()  # Normalizar los pesos
-        
-        # Crear una serie de pesos con los nombres de los activos
-        weights_series = pd.Series(weights, index=sorted_returns.columns)
-        
-        # Verificar que los pesos sean válidos
-        if not weights_series.isna().any():
-            return weights_series
-        else:
-            raise ValueError("Error in weight calculation")
-            
+        weights = weights / weights.sum()
+        return pd.Series(weights, index=sorted_returns.columns)
+
     except Exception as e:
         st.error(f"Error in HRP: {e}")
-        # En caso de error, asignar pesos iguales a todos los activos
         return pd.Series({col: 1.0 / len(returns.columns) for col in returns.columns})
-
 # Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
     try:
@@ -186,27 +164,16 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
 
 # Función para calcular VaR y CVaR
 def calculate_var_cvar(returns, confidence_level=0.95):
-    """
-    Calcula el VaR (Valor en Riesgo) y CVaR (Valor en Riesgo Condicional) de una serie de rendimientos.
-    :param returns: Serie de rendimientos del portafolio.
-    :param confidence_level: Nivel de confianza para el cálculo (por defecto 95%).
-    :return: Tuple (VaR, CVaR).
-    """
     if returns.empty:
-        raise ValueError("No hay datos de retornos para calcular VaR y CVaR.")
+        raise ValueError("No hay datos para calcular VaR y CVaR.")
     
-    # Ordenar los retornos
-    sorted_returns = returns.sort_values()
+    sorted_returns = returns.dropna().sort_values()
+    if sorted_returns.empty:
+        raise ValueError("Datos insuficientes tras filtrar.")
     
-    # Índice para el nivel de confianza
     var_index = int((1 - confidence_level) * len(sorted_returns))
-    
-    # VaR: percentil correspondiente al nivel de confianza
     var = sorted_returns.iloc[var_index]
-    
-    # CVaR: media de los valores por debajo del VaR
     cvar = sorted_returns[sorted_returns <= var].mean()
-    
     return var, cvar
 
 # Configuración de la página
