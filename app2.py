@@ -4,9 +4,47 @@ import yfinance as yf
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-from pypfopt.hierarchical_risk_parity import HierarchicalRiskParity
-from pypfopt import risk_metrics
+from scipy.cluster.hierarchy import linkage, dendrogram
+from scipy.spatial.distance import squareform
 import ta
+
+def hierarchical_risk_parity(returns):
+    """
+    Implementa HRP (Hierarchical Risk Parity)
+    """
+    # 1. Calcular matriz de correlación
+    corr = returns.corr()
+    
+    # 2. Convertir correlación a distancia
+    dist = np.sqrt(2 * (1 - corr))
+    
+    # 3. Clustering jerárquico
+    link = linkage(squareform(dist), 'single')
+    
+    # 4. Ordenar activos basado en el clustering
+    def quasi_diag(link):
+        link = link.astype(int)
+        sort_ix = pd.Series([link[-1, 0], link[-1, 1]])
+        num_items = link[-1, 3]
+        
+        for i in range(len(link) - 2, -1, -1):
+            if link[i, 0] >= num_items:
+                sort_ix.append(link[i, 1])
+            elif link[i, 1] >= num_items:
+                sort_ix.append(link[i, 0])
+                
+        return sort_ix.map(lambda x: x if x < num_items else None).dropna()
+    
+    sort_ix = quasi_diag(link)
+    
+    # 5. Calcular pesos mediante varianza inversa
+    var = returns.var()
+    weights = 1/var
+    weights = weights/weights.sum()
+    
+    # 6. Redistribuir pesos según clusters
+    sorted_weights = weights[sort_ix.astype(int)]
+    return pd.Series(sorted_weights, index=returns.columns)
 
 # Configuración de la página
 st.set_page_config(page_title="Plataforma de Trading Avanzada", layout="wide")
@@ -90,18 +128,17 @@ def calculate_technical_indicators(df, symbol):
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
-    # Optimización HRP
+    # Calcular retornos y aplicar HRP
     returns = portfolio_data.filter(like='Close').pct_change().dropna()
-    hrp = HierarchicalRiskParity()
-    hrp.fit(returns)
-    weights = hrp.optimize()
+    weights = hierarchical_risk_parity(returns)
+    weights_dict = weights.to_dict()
     
     # Crear pestañas
     tab1, tab2, tab3 = st.tabs(["Análisis de Cartera", "Métricas de Rendimiento", "Análisis Técnico"])
     
     with tab1:
-        st.subheader("Composición Optimizada de la Cartera")
-        weights_df = pd.DataFrame(list(weights.items()), columns=['Activo', 'Peso'])
+        st.subheader("Composición Optimizada de la Cartera (HRP)")
+        weights_df = pd.DataFrame(list(weights_dict.items()), columns=['Activo', 'Peso'])
         weights_df['Peso'] = weights_df['Peso'].round(4) * 100
         
         fig = go.Figure(data=[go.Pie(labels=weights_df['Activo'],
@@ -112,7 +149,7 @@ if portfolio_data is not None and not portfolio_data.empty:
         st.dataframe(weights_df)
     
     with tab2:
-        metrics = calculate_metrics(portfolio_data, list(weights.values()))
+        metrics = calculate_metrics(portfolio_data, list(weights_dict.values()))
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -124,7 +161,7 @@ if portfolio_data is not None and not portfolio_data.empty:
         with col4:
             st.metric("Max Drawdown", f"{metrics['Max Drawdown']:.2%}")
         
-        portfolio_returns = portfolio_data.filter(like='Close').pct_change().dot(list(weights.values()))
+        portfolio_returns = portfolio_data.filter(like='Close').pct_change().dot(list(weights_dict.values()))
         cumulative_returns = (1 + portfolio_returns).cumprod()
         
         fig = go.Figure()
