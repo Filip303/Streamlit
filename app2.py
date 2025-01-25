@@ -67,7 +67,9 @@ def calculate_technical_indicators(df, symbol):
     # Additional indicators
     df[f'{symbol}_RSI'] = ta.momentum.rsi(close)
     df[f'{symbol}_MACD'] = ta.trend.macd_diff(close)
-    df[f'{symbol}_BB_upper'], df[f'{symbol}_BB_middle'], df[f'{symbol}_BB_lower'] = ta.volatility.bollinger_bands(close)
+    df[f'{symbol}_BB_upper'] = ta.volatility.bollinger_hband(close)
+    df[f'{symbol}_BB_middle'] = ta.volatility.bollinger_mavg(close)
+    df[f'{symbol}_BB_lower'] = ta.volatility.bollinger_lband(close)
     df[f'{symbol}_ADX'] = ta.trend.adx(high, low, close)
     df[f'{symbol}_OBV'] = ta.volume.on_balance_volume(close, volume)
     df[f'{symbol}_ATR'] = ta.volatility.average_true_range(high, low, close)
