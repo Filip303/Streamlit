@@ -114,7 +114,52 @@ def calculate_metrics_with_benchmark(portfolio_data, weights, risk_free_rate):
         
     except Exception as e:
         st.error(f"Error in metrics calculation: {e}")
-        return None(df, symbol):
+        return None
+
+def hierarchical_risk_parity(returns):
+    try:
+        returns = returns.replace([np.inf, -np.inf], np.nan)
+        returns = returns.fillna(method='ffill').fillna(method='bfill')
+        
+        if returns.empty or returns.isna().all().all():
+            raise ValueError("Insufficient data for calculation")
+        
+        corr = returns.corr()
+        dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))
+        dist = np.nan_to_num(dist, nan=0.0)
+        
+        link = linkage(squareform(dist), method='ward')
+        sort_ix = quasi_diag(link)
+        
+        var = returns.var()
+        var = var.replace(0, np.finfo(float).eps)
+        weights = 1/var
+        weights = weights/weights.sum()
+        
+        weights_series = pd.Series(weights.values, index=returns.columns)
+        
+        if not weights_series.isna().any():
+            return weights_series
+        else:
+            raise ValueError("Error in weight calculation")
+            
+    except Exception as e:
+        st.error(f"Error in HRP: {e}")
+        return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
+
+def quasi_diag(link):
+    link = link.astype(int)
+    num_items = link[-1, 3]
+    sort_ix = []
+    sort_ix.extend([link[-1, 0], link[-1, 1]])
+    
+    for i in range(len(link) - 2, -1, -1):
+        if link[i, 0] >= num_items:
+            sort_ix.append(link[i, 1])
+        elif link[i, 1] >= num_items:
+            sort_ix.append(link[i, 0])
+    
+    return np.array([x for x in sort_ix if x < num_items])(df, symbol):
     try:
         df = df.copy()
         df = df.sort_index()
