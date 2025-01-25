@@ -329,6 +329,23 @@ if portfolio_data is not None and not portfolio_data.empty:
                     indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
                 
                 st.plotly_chart(indicator_fig, use_container_width=True)
+
+if __name__ == "__main__":
+    st.sidebar.markdown("---")
+    st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")
+                
+                indicator_fig.update_layout(
+                    title=f"{indicator} - {selected_symbol}",
+                    xaxis_title="Date",
+                    yaxis_title=indicator,
+                    height=300
+                )
+                
+                if indicator == 'RSI':
+                    indicator_fig.add_hline(y=70, line_dash="dash", line_color="red")
+                    indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
+                
+                st.plotly_chart(indicator_fig, use_container_width=True)
         
         # Trading signals
         st.subheader(f"{t['current_signal']} {selected_symbol}")
