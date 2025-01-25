@@ -4,7 +4,7 @@ import yfinance as yf
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-from pypfopt import HierarchicalRiskParity
+from pypfopt.hierarchical_risk_parity import HierarchicalRiskParity
 from pypfopt import risk_metrics
 import ta
 
