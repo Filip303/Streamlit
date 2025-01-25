@@ -320,7 +320,7 @@ if portfolio_data is not None and not portfolio_data.empty:
 
 if __name__ == "__main__":
     st.sidebar.markdown("---")
-    st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")))
+    st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")
             elif indicator == 'Bollinger Bands':
                 for band in ['upper', 'middle', 'lower']:
                     fig.add_trace(go.Scatter(
