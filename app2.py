@@ -41,6 +41,22 @@ def get_portfolio_data(tickers, period, interval):
         st.error(f"Error al obtener datos del portafolio: {e}")
         return None, None
 
+def get_benchmark_data(period, interval):
+    try:
+        benchmarks = ['SPY', 'URTH']
+        benchmark_data = pd.DataFrame()
+        
+        for ticker in benchmarks:
+            stock = yf.Ticker(ticker)
+            df = stock.history(period=period, interval=interval)
+            if not df.empty:
+                benchmark_data[f"{ticker}_Close"] = df['Close']
+        
+        return benchmark_data
+    except Exception as e:
+        st.error(f"Error al obtener datos de benchmark: {e}")
+        return None
+
 def hierarchical_risk_parity(returns):
     try:
         returns = returns.replace([np.inf, -np.inf], np.nan)
@@ -86,51 +102,55 @@ def quasi_diag(link):
     
     return np.array([x for x in sort_ix if x < num_items])
 
-def calculate_metrics(portfolio_data, weights):
+def calculate_metrics_with_benchmark(portfolio_data, weights, benchmark_data):
     try:
+        # Cálculo retornos del portafolio
         returns = portfolio_data.filter(like='Close').pct_change()
-        returns = returns.replace([np.inf, -np.inf], np.nan).fillna(0)
+        returns.columns = [col.replace('_Close', '') for col in returns.columns]
+        portfolio_return = (returns * weights).sum(axis=1)
         
-        weights_dict = {col.replace('_Close', ''): weight 
-                       for col, weight in zip(returns.columns, weights)}
-        portfolio_return = sum(returns[f"{symbol}_Close"] * weights_dict[symbol] 
-                             for symbol in weights_dict.keys())
+        # Cálculo retornos de benchmarks
+        spy_returns = benchmark_data['SPY_Close'].pct_change()
+        urth_returns = benchmark_data['URTH_Close'].pct_change()
         
         risk_free_rate = 0.02
-        mean_return = portfolio_return.mean()
-        std_return = portfolio_return.std() or 1e-6
-        
-        sharpe = np.sqrt(252) * (mean_return - risk_free_rate/252) / std_return
-        
-        downside_returns = portfolio_return[portfolio_return < 0]
-        downside_std = downside_returns.std() or 1e-6
-        sortino = np.sqrt(252) * (mean_return - risk_free_rate/252) / downside_std
-        
-        cum_returns = (1 + portfolio_return).cumprod()
-        rolling_max = cum_returns.expanding().max()
-        drawdowns = (cum_returns - rolling_max) / rolling_max
-        max_drawdown = drawdowns.min()
-        
-        calmar = abs(252 * mean_return / (max_drawdown or -1e-6))
-        
-        metrics = {
-            'Sharpe': np.clip(sharpe, -100, 100),
-            'Sortino': np.clip(sortino, -100, 100),
-            'Calmar': np.clip(calmar, -100, 100),
-            'Max Drawdown': max_drawdown
+        series_list = {
+            'Portfolio': portfolio_return,
+            'SPY': spy_returns,
+            'URTH': urth_returns
         }
         
-        metrics = {k: 0 if np.isnan(v) else v for k, v in metrics.items()}
+        metrics = {}
+        for name, return_series in series_list.items():
+            mean_return = return_series.mean()
+            std_return = return_series.std() or 1e-6
+            
+            sharpe = np.sqrt(252) * (mean_return - risk_free_rate/252) / std_return
+            
+            downside_returns = return_series[return_series < 0]
+            downside_std = downside_returns.std() or 1e-6
+            sortino = np.sqrt(252) * (mean_return - risk_free_rate/252) / downside_std
+            
+            cum_returns = (1 + return_series).cumprod()
+            rolling_max = cum_returns.expanding().max()
+            drawdowns = (cum_returns - rolling_max) / rolling_max
+            max_drawdown = drawdowns.min()
+            
+            calmar = abs(252 * mean_return / (max_drawdown or -1e-6))
+            
+            metrics[name] = {
+                'Sharpe': np.clip(sharpe, -100, 100),
+                'Sortino': np.clip(sortino, -100, 100),
+                'Calmar': np.clip(calmar, -100, 100),
+                'Max Drawdown': max_drawdown,
+                'Returns': cum_returns
+            }
+        
         return metrics
         
     except Exception as e:
         st.error(f"Error en cálculo de métricas: {e}")
-        return {
-            'Sharpe': 0,
-            'Sortino': 0,
-            'Calmar': 0,
-            'Max Drawdown': 0
-        }
+        return None
 
 def calculate_technical_indicators(df, symbol):
     try:
@@ -212,48 +232,51 @@ if portfolio_data is not None and not portfolio_data.empty:
         st.dataframe(weights_df.round(2))
     
     with tab2:
-        metrics = calculate_metrics(portfolio_data, weights)
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Ratio Sharpe", f"{metrics['Sharpe']:.2f}")
-        with col2:
-            st.metric("Ratio Sortino", f"{metrics['Sortino']:.2f}")
-        with col3:
-            st.metric("Ratio Calmar", f"{metrics['Calmar']:.2f}")
-        with col4:
-            st.metric("Max Drawdown", f"{metrics['Max Drawdown']:.2%}")
-        
-        close_prices = portfolio_data.filter(like='Close')
-        close_prices.columns = [col.replace('_Close', '') for col in close_prices.columns]
-        portfolio_returns = (close_prices.pct_change() * weights).sum(axis=1)
-        cumulative_returns = (1 + portfolio_returns).cumprod()
-        
-        # Obtener datos del SPY y URTH
-        spy_data = yf.download("SPY", period=period, interval=interval)['Close']
-        urth_data = yf.download("URTH", period=period, interval=interval)['Close']
-        
-        # Calcular retornos acumulados para SPY y URTH
-        spy_cum_returns = (1 + spy_data.pct_change().fillna(0)).cumprod()
-        urth_cum_returns = (1 + urth_data.pct_change().fillna(0)).cumprod()
-        
-        # Gráfico de retornos acumulados en escala logarítmica
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=cumulative_returns.index,
-                               y=cumulative_returns,
-                               name='Cartera'))
-        fig.add_trace(go.Scatter(x=spy_cum_returns.index,
-                               y=spy_cum_returns,
-                               name='SPY'))
-        fig.add_trace(go.Scatter(x=urth_cum_returns.index,
-                               y=urth_cum_returns,
-                               name='URTH'))
-        fig.update_layout(title="Comparación de Retornos Acumulados (Escala Logarítmica)",
-                         xaxis_title="Fecha",
-                         yaxis_title="Retorno Acumulado",
-                         yaxis_type="log",
-                         height=600)
-        st.plotly_chart(fig, use_container_width=True)
+        benchmark_data = get_benchmark_data(period, interval)
+        if benchmark_data is not None:
+            metrics = calculate_metrics_with_benchmark(portfolio_data, weights, benchmark_data)
+            
+            st.subheader("Métricas de Rendimiento")
+            metrics_df = pd.DataFrame({
+                'Métrica': ['Ratio Sharpe', 'Ratio Sortino', 'Ratio Calmar', 'Max Drawdown'],
+                'Portfolio': [
+                    f"{metrics['Portfolio']['Sharpe']:.2f}",
+                    f"{metrics['Portfolio']['Sortino']:.2f}",
+                    f"{metrics['Portfolio']['Calmar']:.2f}",
+                    f"{metrics['Portfolio']['Max Drawdown']:.2%}"
+                ],
+                'SPY': [
+                    f"{metrics['SPY']['Sharpe']:.2f}",
+                    f"{metrics['SPY']['Sortino']:.2f}",
+                    f"{metrics['SPY']['Calmar']:.2f}",
+                    f"{metrics['SPY']['Max Drawdown']:.2%}"
+                ],
+                'URTH': [
+                    f"{metrics['URTH']['Sharpe']:.2f}",
+                    f"{metrics['URTH']['Sortino']:.2f}",
+                    f"{metrics['URTH']['Calmar']:.2f}",
+                    f"{metrics['URTH']['Max Drawdown']:.2%}"
+                ]
+            })
+            
+            st.dataframe(metrics_df)
+            
+            # Gráfico comparativo
+            fig = go.Figure()
+            for name in ['Portfolio', 'SPY', 'URTH']:
+                fig.add_trace(go.Scatter(
+                    x=metrics[name]['Returns'].index,
+                    y=metrics[name]['Returns'],
+                    name=name
+                ))
+            
+            fig.update_layout(
+                title="Comparación de Rendimiento",
+                xaxis_title="Fecha",
+                yaxis_title="Retorno Acumulado",
+                height=500
+            )
+            st.plotly_chart(fig, use_container_width=True)
     
     with tab3:
         selected_symbol = st.selectbox("Seleccionar Activo", symbols)
@@ -284,10 +307,9 @@ if portfolio_data is not None and not portfolio_data.empty:
                                y=technical_data[f'{selected_symbol}_SMA50'],
                                name='SMA 50'))
         
-        fig.update_layout(title=f"Análisis Técnico - {selected_symbol} (Escala Logarítmica)",
+        fig.update_layout(title=f"Análisis Técnico - {selected_symbol}",
                          xaxis_title="Fecha",
                          yaxis_title="Precio",
-                         yaxis_type="log",
                          height=600)
         
         st.plotly_chart(fig, use_container_width=True)
