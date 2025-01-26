@@ -306,7 +306,7 @@ if portfolio_data is not None and not portfolio_data.empty:
         if chart_type == 'Candlestick':
             fig.add_trace(go.Candlestick(
                 x=technical_data.index,
-                open=technical_data[f'{selected_symbol}_Open'],
+                open=technical_data[fopen=technical_data[f'{selected_symbol}_Open'],
                 high=technical_data[f'{selected_symbol}_High'],
                 low=technical_data[f'{selected_symbol}_Low'],
                 close=technical_data[f'{selected_symbol}_Close'],
@@ -407,19 +407,49 @@ if portfolio_data is not None and not portfolio_data.empty:
                     y=portfolio_data[f'{selected_symbol}_Close'],
                     name=selected_symbol
                 ))
+
+            # Añadir líneas de stop loss y take profit con anotaciones mejoradas
+            fig.add_hline(
+                y=stop_loss,
+                line_color="red",
+                line_dash="dash",
+                annotation=dict(
+                    text=f"Stop Loss (${stop_loss:.2f})",
+                    xref="paper",
+                    x=1.02,
+                    y=stop_loss,
+                    showarrow=False,
+                    font=dict(color="red", size=12),
+                    yanchor="middle"
+                )
+            )
+
+            fig.add_hline(
+                y=take_profit,
+                line_color="green",
+                line_dash="dash",
+                annotation=dict(
+                    text=f"Take Profit {risk_multiplier}x (${take_profit:.2f})",
+                    xref="paper",
+                    x=1.02,
+                    y=take_profit,
+                    showarrow=False,
+                    font=dict(color="green", size=12),
+                    yanchor="middle"
+                )
+            )
             
-            fig.add_hline(y=stop_loss, line_color="red", line_dash="dash",
-                         annotation_text=f"Stop Loss (${stop_loss:.2f})")
-            fig.add_hline(y=take_profit, line_color="green", line_dash="dash",
-                         annotation_text=f"Take Profit {risk_multiplier}x (${take_profit:.2f})")
-            
+            # Configuración mejorada del layout
             fig.update_layout(
                 title=f"Trading View - {selected_symbol}",
                 xaxis_title="Fecha",
                 yaxis_title="Precio",
                 height=600,
+                margin=dict(r=150),  # Aumentar margen derecho para las anotaciones
+                showlegend=True,
                 yaxis_type='log' if use_log else 'linear'
             )
+            
             st.plotly_chart(fig, use_container_width=True)
         
         with col2:
