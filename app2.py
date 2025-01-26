@@ -364,6 +364,10 @@ st.sidebar.warning("""
 Esta es una versión demo - No usar para trading real.
 """)
 
+# Obtener símbolos del input
+symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
+symbols = [s.strip() for s in symbols_input.split(",")]
+
 # Crear tabs principales
 tabs = st.tabs(["Trading", "Análisis Técnico", "Noticias", "Fundamental", "Macro"])
 
