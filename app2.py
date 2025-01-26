@@ -257,6 +257,23 @@ def calculate_technical_indicators(df, symbol):
        st.error(f"Error calculando indicadores para {symbol}: {e}")
    
    return df.fillna(method='ffill').fillna(method='bfill')
+    
+def calculate_var_cvar(returns, confidence_level=0.95):
+   try:
+       if isinstance(returns, pd.Series):
+           returns = returns.dropna()
+       
+       if len(returns) < 2:
+           return 0, 0
+           
+       returns_array = np.array(returns)
+       var = np.percentile(returns_array, (1 - confidence_level) * 100)
+       cvar = returns_array[returns_array <= var].mean()
+       
+       return var, cvar if not np.isnan(cvar) else var
+   except Exception as e:
+       st.error(f"Error en cálculo VaR/CVaR: {e}")
+       return 0, 0
 
 def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
     try:
