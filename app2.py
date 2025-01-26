@@ -408,35 +408,21 @@ if portfolio_data is not None and not portfolio_data.empty:
                     name=selected_symbol
                 ))
 
-            # Añadir líneas de stop loss y take profit con anotaciones mejoradas
+            # Añadir líneas de stop loss y take profit simplificadas
             fig.add_hline(
                 y=stop_loss,
                 line_color="red",
                 line_dash="dash",
-                annotation=dict(
-                    text=f"Stop Loss (${stop_loss:.2f})",
-                    xref="paper",
-                    x=1.02,
-                    y=stop_loss,
-                    showarrow=False,
-                    font=dict(color="red", size=12),
-                    yanchor="middle"
-                )
+                annotation_text=f"Stop Loss (${stop_loss:.2f})",
+                annotation_position="top right"
             )
 
             fig.add_hline(
                 y=take_profit,
                 line_color="green",
                 line_dash="dash",
-                annotation=dict(
-                    text=f"Take Profit {risk_multiplier}x (${take_profit:.2f})",
-                    xref="paper",
-                    x=1.02,
-                    y=take_profit,
-                    showarrow=False,
-                    font=dict(color="green", size=12),
-                    yanchor="middle"
-                )
+                annotation_text=f"Take Profit {risk_multiplier}x (${take_profit:.2f})",
+                annotation_position="top right"
             )
             
             # Configuración mejorada del layout
