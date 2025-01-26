@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
+from arch import arch_model
 from scipy.stats import norm
 import statsmodels.api as sm
 import ta
@@ -256,6 +257,7 @@ if portfolio_data is not None and not portfolio_data.empty:
     returns = portfolio_data[close_cols].pct_change().dropna()
     returns.columns = [col.replace('_Close', '') for col in returns.columns]
     weights = hierarchical_risk_parity(returns)
+    metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
     
     tab1, tab2, tab3 = st.tabs(["Análisis de Cartera", "Análisis Técnico", "Panel de Trading"])
     
