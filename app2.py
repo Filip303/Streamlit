@@ -84,19 +84,27 @@ def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplie
 
 # Función para obtener datos de la cartera
 def get_portfolio_data(tickers, period, interval):
-    portfolio_data = pd.DataFrame()
-    info_dict = {}
-    for ticker in tickers:
-        try:
-            stock = yf.Ticker(ticker)
-            df = stock.history(period=period, interval=interval)
-            if not df.empty:
-                for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
-                    portfolio_data[f"{ticker}_{col}"] = df[col]
-                info_dict[ticker] = stock.info
-        except Exception as e:
-            st.warning(f"Error al obtener datos para {ticker}: {e}")
-    return portfolio_data, info_dict
+   portfolio_data = pd.DataFrame()
+   info_dict = {}
+   
+   for ticker in tickers:
+       try:
+           stock = yf.Ticker(ticker)
+           df = stock.history(period=period, interval=interval)
+           if not df.empty:
+               for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+                   portfolio_data[f"{ticker}_{col}"] = df[col]
+               info_dict[ticker] = stock.info
+           else:
+               st.warning(f"No hay datos para {ticker}")
+       except Exception as e:
+           st.warning(f"Error al obtener datos de {ticker}: {e}")
+           
+   if portfolio_data.empty:
+       st.error("No se pudieron obtener datos para ningún símbolo")
+       return None, None
+       
+   return portfolio_data, info_dict
 
 # Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
