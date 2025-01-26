@@ -364,21 +364,16 @@ st.sidebar.warning("""
 Esta es una versión demo - No usar para trading real.
 """)
 
-# Obtener símbolos del input
-symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
-symbols = [s.strip() for s in symbols_input.split(",")]
-
 # Crear tabs principales
 tabs = st.tabs(["Trading", "Análisis Técnico", "Noticias", "Fundamental", "Macro"])
 
 with tabs[0]:
     st.header("Panel de Trading")
-
-    # Sidebar configuration
-    # Configuración de trading
+    
     col1, col2, col3 = st.columns(3)
     with col1:
         symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
+        symbols = [s.strip() for s in symbols_input.split(",")]
         period = st.selectbox("Período", ["1mo", "3mo", "6mo", "1y", "2y", "5y"])
     with col2:
         interval = st.selectbox("Intervalo", ["1d", "5d", "1wk", "1mo"])
