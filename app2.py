@@ -54,42 +54,28 @@ def get_news_by_category(category, page_size=10):
 
 # Función para obtener datos fundamentales de un ticker
 def get_fundamental_data(ticker):
-   url = f"https://www.alphavantage.co/query"
-   endpoints = {
-       "overview": {
-           "function": "OVERVIEW",
-           "symbol": ticker,
-           "apikey": ALPHA_VANTAGE_KEY
-       },
-       "income": {
-           "function": "INCOME_STATEMENT",
-           "symbol": ticker,
-           "apikey": ALPHA_VANTAGE_KEY
-       },
-       "balance": {
-           "function": "BALANCE_SHEET",
-           "symbol": ticker,
-           "apikey": ALPHA_VANTAGE_KEY
-       },
-       "cash": {
-           "function": "CASH_FLOW",
-           "symbol": ticker,
-           "apikey": ALPHA_VANTAGE_KEY
-       }
-   }
-   
-   data = {}
-   for key, params in endpoints.items():
-       try:
-           response = requests.get(url, params=params)
-           if response.status_code == 200:
-               data[key] = response.json()
-           # Añadir delay para evitar límites de API
-           time.sleep(0.5)
-       except Exception as e:
-           st.error(f"Error obteniendo datos de {key}: {e}")
-   
-   return data
+    import time  # Añadir esta importación
+    
+    url = f"https://www.alphavantage.co/query"
+    endpoints = {
+        "overview": {"function": "OVERVIEW", "symbol": ticker},
+        "income": {"function": "INCOME_STATEMENT", "symbol": ticker},
+        "balance": {"function": "BALANCE_SHEET", "symbol": ticker},
+        "cash": {"function": "CASH_FLOW", "symbol": ticker}
+    }
+    
+    data = {}
+    for key, params in endpoints.items():
+        try:
+            params["apikey"] = ALPHA_VANTAGE_KEY
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                data[key] = response.json()
+            time.sleep(0.5)  # Delay entre llamadas
+        except Exception as e:
+            st.error(f"Error obteniendo datos de {key}: {e}")
+    
+    return data
 
 # Función para obtener datos de FRED
 def get_fred_data(series_id, start_date=None, end_date=None):
@@ -358,13 +344,9 @@ st.set_page_config(page_title="Trading Platform Pro V5+", layout="wide")
 st.title("📈 Trading Platform Pro V5+")
 
 # Mensaje en sidebar
-st.sidebar.markdown("---")
-st.sidebar.warning("""
-⚠️ PLATAFORMA EN DESARROLLO
-Esta es una versión demo - No usar para trading real.
-""")
+st.sidebar.warning("⚠️ PLATAFORMA EN DESARROLLO\nEsta es una versión demo - No usar para trading real.")
 
-# Crear tabs principales
+# Crear tabs una sola vez
 tabs = st.tabs(["Trading", "Análisis Técnico", "Noticias", "Fundamental", "Macro"])
 
 with tabs[0]:
