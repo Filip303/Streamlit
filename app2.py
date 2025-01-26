@@ -13,9 +13,11 @@ import requests
 import time
 from fredapi import Fred
 
+# Configuración de claves API
 ALPHA_VANTAGE_KEY = "9M00TPMNCN2ZW1G5"
 FRED_API_KEY = "8617ec24219966a9191eb6a9d9d9fd24"
 
+# Función para obtener datos fundamentales
 def get_fundamental_data(ticker):
     url = "https://www.alphavantage.co/query"
     endpoints = {
@@ -38,6 +40,7 @@ def get_fundamental_data(ticker):
     
     return data
 
+# Función para obtener datos de FRED
 def get_fred_data(series_id, start_date=None, end_date=None):
     fred = Fred(api_key=FRED_API_KEY)
     try:
@@ -47,6 +50,7 @@ def get_fred_data(series_id, start_date=None, end_date=None):
         st.error(f"Error en datos FRED: {e}")
         return None
 
+# Diccionario de indicadores FRED
 FRED_INDICATORS = {
     'GDP': 'GDP',
     'Real GDP': 'GDPC1',
@@ -63,6 +67,7 @@ FRED_INDICATORS = {
     'Initial Jobless Claims': 'ICSA'
 }
 
+# Función para obtener datos de la cartera
 def get_portfolio_data(tickers, period, interval):
     portfolio_data = pd.DataFrame()
     info_dict = {}
@@ -78,6 +83,7 @@ def get_portfolio_data(tickers, period, interval):
             st.warning(f"Error al obtener datos para {ticker}: {e}")
     return portfolio_data, info_dict
 
+# Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
     try:
         benchmarks = ['SPY', 'URTH']
@@ -92,6 +98,7 @@ def get_benchmark_data(period, interval):
         st.error(f"Error al obtener datos de benchmark: {e}")
         return None
 
+# Función para calcular la volatilidad HAR
 def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
     rv = returns ** 2
     rv_daily = rv.rolling(window=lags[0]).mean()
@@ -111,6 +118,7 @@ def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
     forecast = model.predict(X.iloc[-1:]).iloc[0]
     return np.sqrt(forecast) * scale_factor
 
+# Función para calcular el Ichimoku Cloud
 def calculate_ichimoku(df, symbol):
     high = df[f'{symbol}_High']
     low = df[f'{symbol}_Low']
@@ -135,6 +143,7 @@ def calculate_ichimoku(df, symbol):
     
     return df
 
+# Función para calcular el riesgo usando HRP
 def hierarchical_risk_parity(returns):
     try:
         returns = returns.dropna(axis=1, how='all')
@@ -156,6 +165,7 @@ def hierarchical_risk_parity(returns):
         st.error(f"Error en cálculo HRP: {e}")
         return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
 
+# Función para calcular indicadores técnicos
 def calculate_technical_indicators(df, symbol):
     if df is None or df.empty or len(df) < 26:  # Aseguramos mínimo de datos
         return pd.DataFrame()
@@ -210,62 +220,7 @@ def calculate_technical_indicators(df, symbol):
     
     return df.fillna(method='ffill').fillna(method='bfill')
 
-def calculate_technical_indicators(df, symbol):
-   if df is None or df.empty:
-       return pd.DataFrame()
-       
-   df = df.copy()
-   try:
-       close = df[f'{symbol}_Close']
-       high = df[f'{symbol}_High']
-       low = df[f'{symbol}_Low']
-       volume = df[f'{symbol}_Volume']
-       
-       # Indicadores básicos
-       df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
-           high=high, low=low, close=close, volume=volume)
-       df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close, window=20)
-       df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(close, window=50)
-       df[f'{symbol}_SMA20'] = close.rolling(window=20).mean()
-       df[f'{symbol}_SMA50'] = close.rolling(window=50).mean()
-       
-       # Momentum
-       df[f'{symbol}_RSI'] = ta.momentum.rsi(close, window=14)
-       df[f'{symbol}_MACD'] = ta.trend.macd_diff(close)
-       df[f'{symbol}_MACD_signal'] = ta.trend.macd_signal(close)
-       df[f'{symbol}_MACD_line'] = ta.trend.macd(close)
-       df[f'{symbol}_Stoch_RSI'] = ta.momentum.stochrsi(close)
-       df[f'{symbol}_MFI'] = ta.volume.money_flow_index(high, low, close, volume)
-       df[f'{symbol}_TSI'] = ta.momentum.tsi(close)
-       
-       # Trend
-       df[f'{symbol}_ADX'] = ta.trend.adx(high, low, close, window=14)
-       df[f'{symbol}_CCI'] = ta.trend.cci(high, low, close)
-       df[f'{symbol}_DPO'] = ta.trend.dpo(close)
-       df[f'{symbol}_TRIX'] = ta.trend.trix(close)
-       
-       # Volatilidad
-       df[f'{symbol}_BB_upper'] = ta.volatility.bollinger_hband(close)
-       df[f'{symbol}_BB_middle'] = ta.volatility.bollinger_mavg(close)
-       df[f'{symbol}_BB_lower'] = ta.volatility.bollinger_lband(close)
-       df[f'{symbol}_ATR'] = ta.volatility.average_true_range(high, low, close)
-       df[f'{symbol}_KC_upper'] = ta.volatility.keltner_channel_hband(high, low, close)
-       df[f'{symbol}_KC_lower'] = ta.volatility.keltner_channel_lband(high, low, close)
-       
-       # Volumen
-       df[f'{symbol}_OBV'] = ta.volume.on_balance_volume(close, volume)
-       df[f'{symbol}_Force_Index'] = ta.volume.force_index(close, volume)
-       df[f'{symbol}_EOM'] = ta.volume.ease_of_movement(high, low, volume)
-       df[f'{symbol}_Volume_SMA'] = volume.rolling(window=20).mean()
-       
-       # Ichimoku
-       df = calculate_ichimoku(df, symbol)
-       
-   except Exception as e:
-       st.error(f"Error calculando indicadores para {symbol}: {e}")
-   
-   return df.fillna(method='ffill').fillna(method='bfill')
-    
+# Función para calcular VaR y CVaR
 def calculate_var_cvar(returns, confidence_level=0.95):
    try:
        if isinstance(returns, pd.Series):
@@ -283,6 +238,7 @@ def calculate_var_cvar(returns, confidence_level=0.95):
        st.error(f"Error en cálculo VaR/CVaR: {e}")
        return 0, 0
 
+# Función para calcular métricas de la cartera
 def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
     try:
         metrics = {}
@@ -351,6 +307,7 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
         st.error(f"Error en cálculo de métricas: {e}")
         return None
 
+# Función para graficar indicadores técnicos
 def plot_indicators(fig, technical_data, selected_symbol, selected_indicators):
     for indicator in selected_indicators:
         if indicator == 'Ichimoku':
@@ -411,6 +368,7 @@ def plot_indicators(fig, technical_data, selected_symbol, selected_indicators):
                 ))
     return fig
 
+# Función para crear subgráficos de indicadores
 def create_indicator_subplot(technical_data, selected_symbol, indicator):
     fig = go.Figure()
     
@@ -449,7 +407,7 @@ def create_indicator_subplot(technical_data, selected_symbol, indicator):
     
     return fig
 
-# DESPUÉS: El código principal
+# Configuración de la interfaz de Streamlit
 st.set_page_config(page_title="Trading Platform Pro V5", layout="wide")
 st.title("📈 Trading Platform Pro V5")
 st.warning("⚠️ Sitio en construcción - Solo para uso educativo!")
@@ -467,11 +425,11 @@ with col3:
     confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
     risk_free_rate = st.number_input("Tasa Libre de Riesgo Anual (%)", 0.0, 100.0, 2.0) / 100.0
 
-# Obtener datos
+# Obtener datos de la cartera
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
-    # Calcular métricas una sola vez
+    # Calcular métricas de la cartera
     close_cols = [col for col in portfolio_data.columns if col.endswith('_Close')]
     returns = portfolio_data[close_cols].pct_change().dropna()
     returns.columns = [col.replace('_Close', '') for col in returns.columns]
@@ -496,6 +454,7 @@ if portfolio_data is not None and not portfolio_data.empty:
             
             st.dataframe(metrics_df, use_container_width=True, hide_index=True)
     
+    # Pestañas de análisis
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Análisis de Cartera", "Indicadores Técnicos", "Análisis Fundamental", "Análisis Macro", "Panel de Trading"])
     
     with tab1:
@@ -527,64 +486,164 @@ if portfolio_data is not None and not portfolio_data.empty:
         )
         st.plotly_chart(fig, use_container_width=True)
     
-   with tab2:
-    available_indicators = [
-        'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
-        'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
-        'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
-        'ADX', 'CCI', 'DPO', 'TRIX',
-        'OBV', 'Force Index', 'EOM', 'Volume SMA'
-    ]
-    selected_symbol = st.selectbox("Seleccionar Activo", symbols, key="technical_select")
-    selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators, key="indicators_select")
-    
-   if len(selected_indicators) > 0:  # Solo plotear indicadores si hay seleccionados
+    with tab2:
+        available_indicators = [
+            'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
+            'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
+            'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
+            'ADX', 'CCI', 'DPO', 'TRIX',
+            'OBV', 'Force Index', 'EOM', 'Volume SMA'
+        ]
+        selected_symbol = st.selectbox("Seleccionar Activo", symbols, key="technical_select")
+        selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators, key="indicators_select")
+        
+        if len(selected_indicators) > 0:
+            technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
+            fig = go.Figure()
+            
+            if chart_type == 'Candlestick':
+                fig.add_trace(go.Candlestick(
+                    x=technical_data.index,
+                    open=technical_data[f'{selected_symbol}_Open'],
+                    high=technical_data[f'{selected_symbol}_High'],
+                    low=technical_data[f'{selected_symbol}_Low'],
+                    close=technical_data[f'{selected_symbol}_Close'],
+                    name=selected_symbol
+                ))
+            elif chart_type == 'OHLC':
+                fig.add_trace(go.Ohlc(
+                    x=technical_data.index,
+                    open=technical_data[f'{selected_symbol}_Open'],
+                    high=technical_data[f'{selected_symbol}_High'],
+                    low=technical_data[f'{selected_symbol}_Low'],
+                    close=technical_data[f'{selected_symbol}_Close'],
+                    name=selected_symbol
+                ))
+            else:
+                fig.add_trace(go.Scatter(
+                    x=technical_data.index,
+                    y=technical_data[f'{selected_symbol}_Close'],
+                    name=selected_symbol
+                ))
+            
             plot_indicators(fig, technical_data, selected_symbol, selected_indicators)
-        
-        fig = go.Figure()
-        
-        if chart_type == 'Candlestick':
-            fig.add_trace(go.Candlestick(
-                x=technical_data.index,
-                open=technical_data[f'{selected_symbol}_Open'],
-                high=technical_data[f'{selected_symbol}_High'],
-                low=technical_data[f'{selected_symbol}_Low'],
-                close=technical_data[f'{selected_symbol}_Close'],
-                name=selected_symbol
-            ))
-        elif chart_type == 'OHLC':
-            fig.add_trace(go.Ohlc(
-                x=technical_data.index,
-                open=technical_data[f'{selected_symbol}_Open'],
-                high=technical_data[f'{selected_symbol}_High'],
-                low=technical_data[f'{selected_symbol}_Low'],
-                close=technical_data[f'{selected_symbol}_Close'],
-                name=selected_symbol
-            ))
-        else:
-            fig.add_trace(go.Scatter(
-                x=technical_data.index,
-                y=technical_data[f'{selected_symbol}_Close'],
-                name=selected_symbol
-            ))
-        
-        plot_indicators(fig, technical_data, selected_symbol, selected_indicators)
-        
-        fig.update_layout(
-            title=f"Análisis Técnico - {selected_symbol}",
-            xaxis_title="Fecha",
-            yaxis_title="Precio",
-            height=600,
-            yaxis_type='log'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        for indicator in selected_indicators:
-            if indicator in ['RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI', 'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index', 'EOM']:
-                indicator_fig = create_indicator_subplot(technical_data, selected_symbol, indicator)
-                st.plotly_chart(indicator_fig, use_container_width=True)
+            
+            fig.update_layout(
+                title=f"Análisis Técnico - {selected_symbol}",
+                xaxis_title="Fecha",
+                yaxis_title="Precio",
+                height=600,
+                yaxis_type='log'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            for indicator in selected_indicators:
+                if indicator in ['RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI', 'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index', 'EOM']:
+                    indicator_fig = create_indicator_subplot(technical_data, selected_symbol, indicator)
+                    st.plotly_chart(indicator_fig, use_container_width=True)
     
-    with st.expander("💹 Panel de Trading", expanded=True):
+    with tab3:
+        st.subheader("📊 Análisis Fundamental")
+        fundamental_ticker = st.text_input("Símbolo", "AAPL")
+        
+        if st.button("Analizar"):
+            fundamental_data = get_fundamental_data(fundamental_ticker)
+            
+            if fundamental_data and 'overview' in fundamental_data:
+                overview = fundamental_data['overview']
+                income = fundamental_data.get('income', {}).get('annualReports', [{}])[0]
+                balance = fundamental_data.get('balance', {}).get('annualReports', [{}])[0]
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Market Cap", f"${overview.get('MarketCapitalization', 'N/A')}")
+                    st.metric("P/E Ratio", overview.get('PERatio', 'N/A'))
+                    st.metric("Beta", overview.get('Beta', 'N/A'))
+                
+                with col2:
+                    st.metric("ROE", f"{overview.get('ReturnOnEquityTTM', 'N/A')}%")
+                    st.metric("Profit Margin", f"{overview.get('ProfitMargin', 'N/A')}%")
+                    st.metric("Operating Margin", f"{overview.get('OperatingMarginTTM', 'N/A')}%")
+                
+                with col3:
+                    st.metric("Dividend Yield", f"{overview.get('DividendYield', 'N/A')}%")
+                    st.metric("Payout Ratio", overview.get('PayoutRatio', 'N/A'))
+                    st.metric("52W High/Low", f"${overview.get('52WeekHigh', 'N/A')}/${overview.get('52WeekLow', 'N/A')}")
+
+                st.subheader("Estados Financieros")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("**Income Statement**")
+                    st.write(f"Revenue: ${income.get('totalRevenue', 'N/A')}")
+                    st.write(f"Gross Profit: ${income.get('grossProfit', 'N/A')}")
+                    st.write(f"Net Income: ${income.get('netIncome', 'N/A')}")
+                
+                with col2:
+                    st.write("**Balance Sheet**")
+                    st.write(f"Total Assets: ${balance.get('totalAssets', 'N/A')}")
+                    st.write(f"Total Liabilities: ${balance.get('totalLiabilities', 'N/A')}")
+                    st.write(f"Total Equity: ${balance.get('totalShareholderEquity', 'N/A')}")
+
+    with tab4:
+        st.subheader("🌍 Análisis Macroeconómico")
+        
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            selected_indicator = st.selectbox(
+                "Indicador Predefinido",
+                options=list(FRED_INDICATORS.keys())
+            )
+            
+            custom_series = st.text_input("O introduce código FRED personalizado")
+            
+            start_date = st.date_input(
+                "Fecha Inicio",
+                value=pd.to_datetime("2020-01-01")
+            )
+            end_date = st.date_input(
+                "Fecha Fin",
+                value=pd.to_datetime("2023-12-31")
+            )
+            
+            if st.button("Obtener Datos"):
+                series_id = FRED_INDICATORS[selected_indicator] if not custom_series else custom_series
+                fred_data = get_fred_data(series_id, start_date, end_date)
+                
+                if fred_data is not None:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=fred_data.index,
+                        y=fred_data['value'],
+                        mode='lines',
+                        name=selected_indicator if not custom_series else custom_series
+                    ))
+                    
+                    fig.update_layout(
+                        title=f"Datos de {selected_indicator if not custom_series else custom_series}",
+                        xaxis_title="Fecha",
+                        yaxis_title="Valor",
+                        height=500
+                    )
+                    
+                    with col2:
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        st.subheader("Estadísticas")
+                        stats_col1, stats_col2 = st.columns(2)
+                        
+                        with stats_col1:
+                            st.metric("Último Valor", f"{fred_data['value'].iloc[-1]:.2f}")
+                            st.metric("Media", f"{fred_data['value'].mean():.2f}")
+                            
+                        with stats_col2:
+                            st.metric("Mínimo", f"{fred_data['value'].min():.2f}")
+                            st.metric("Máximo", f"{fred_data['value'].max():.2f}")
+
+    with tab5:
+        st.subheader("💹 Panel de Trading")
         trading_symbol_input = st.text_input("Símbolo para Trading", "AAPL", key='trading_symbol_input')
         selected_symbol = trading_symbol_input.strip()
         
@@ -690,106 +749,7 @@ if portfolio_data is not None and not portfolio_data.empty:
             st.write(f"Riesgo máximo: ${risk_total:.2f}")
             st.write(f"Beneficio objetivo: ${reward_total:.2f}")
 
-with tab3:
-    st.subheader("📊 Análisis Fundamental")
-    fundamental_ticker = st.text_input("Símbolo", "AAPL")
-    
-    if st.button("Analizar"):
-        fundamental_data = get_fundamental_data(fundamental_ticker)
-        
-        if fundamental_data and 'overview' in fundamental_data:
-            overview = fundamental_data['overview']
-            income = fundamental_data.get('income', {}).get('annualReports', [{}])[0]
-            balance = fundamental_data.get('balance', {}).get('annualReports', [{}])[0]
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Market Cap", f"${overview.get('MarketCapitalization', 'N/A')}")
-                st.metric("P/E Ratio", overview.get('PERatio', 'N/A'))
-                st.metric("Beta", overview.get('Beta', 'N/A'))
-            
-            with col2:
-                st.metric("ROE", f"{overview.get('ReturnOnEquityTTM', 'N/A')}%")
-                st.metric("Profit Margin", f"{overview.get('ProfitMargin', 'N/A')}%")
-                st.metric("Operating Margin", f"{overview.get('OperatingMarginTTM', 'N/A')}%")
-            
-            with col3:
-                st.metric("Dividend Yield", f"{overview.get('DividendYield', 'N/A')}%")
-                st.metric("Payout Ratio", overview.get('PayoutRatio', 'N/A'))
-                st.metric("52W High/Low", f"${overview.get('52WeekHigh', 'N/A')}/${overview.get('52WeekLow', 'N/A')}")
-
-            st.subheader("Estados Financieros")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write("**Income Statement**")
-                st.write(f"Revenue: ${income.get('totalRevenue', 'N/A')}")
-                st.write(f"Gross Profit: ${income.get('grossProfit', 'N/A')}")
-                st.write(f"Net Income: ${income.get('netIncome', 'N/A')}")
-            
-            with col2:
-                st.write("**Balance Sheet**")
-                st.write(f"Total Assets: ${balance.get('totalAssets', 'N/A')}")
-                st.write(f"Total Liabilities: ${balance.get('totalLiabilities', 'N/A')}")
-                st.write(f"Total Equity: ${balance.get('totalShareholderEquity', 'N/A')}")
-
-with tab4:
-    st.subheader("🌍 Análisis Macroeconómico")
-    
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        selected_indicator = st.selectbox(
-            "Indicador Predefinido",
-            options=list(FRED_INDICATORS.keys())
-        )
-        
-        custom_series = st.text_input("O introduce código FRED personalizado")
-        
-        start_date = st.date_input(
-            "Fecha Inicio",
-            value=pd.to_datetime("2020-01-01")
-        )
-        end_date = st.date_input(
-            "Fecha Fin",
-            value=pd.to_datetime("2023-12-31")
-        )
-        
-        if st.button("Obtener Datos"):
-            series_id = FRED_INDICATORS[selected_indicator] if not custom_series else custom_series
-            fred_data = get_fred_data(series_id, start_date, end_date)
-            
-            if fred_data is not None:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=fred_data.index,
-                    y=fred_data['value'],
-                    mode='lines',
-                    name=selected_indicator if not custom_series else custom_series
-                ))
-                
-                fig.update_layout(
-                    title=f"Datos de {selected_indicator if not custom_series else custom_series}",
-                    xaxis_title="Fecha",
-                    yaxis_title="Valor",
-                    height=500
-                )
-                
-                with col2:
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    st.subheader("Estadísticas")
-                    stats_col1, stats_col2 = st.columns(2)
-                    
-                    with stats_col1:
-                        st.metric("Último Valor", f"{fred_data['value'].iloc[-1]:.2f}")
-                        st.metric("Media", f"{fred_data['value'].mean():.2f}")
-                        
-                    with stats_col2:
-                        st.metric("Mínimo", f"{fred_data['value'].min():.2f}")
-                        st.metric("Máximo", f"{fred_data['value'].max():.2f}")
-
+# Barra lateral
 st.sidebar.markdown("---")
 st.sidebar.info("""
 Características:
