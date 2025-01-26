@@ -16,11 +16,11 @@ import requests
 import fredapi
 
 # API Keys
-NEWS_API_KEY = "a00c1a624f854f3c9f48a167ed72eff1"
-FMP_API_KEY = "a8e2b58aed2cfb3c624c1962fb52e198"
+NEWS_API_KEY = "a00c1a624f854f3c9f48a167ed72eff1" 
+ALPHA_VANTAGE_KEY = "9M00TPMNCN2ZW1G5"
 FRED_API_KEY = "8617ec24219966a9191eb6a9d9d9fd24"
 
-# Inicialización del cliente FRED
+# Initialize FRED client
 fred = fredapi.Fred(api_key=FRED_API_KEY)
 
 # ==================================================
@@ -29,65 +29,77 @@ fred = fredapi.Fred(api_key=FRED_API_KEY)
 
 # Función para obtener noticias por categoría
 def get_news_by_category(category, page_size=10):
-    queries = {
-        "financial": "financial OR market OR stock",
-        "macro": "macroeconomic OR economy OR gdp OR inflation",
-        "political": "politics OR government OR regulation",
-        "corporate": "earnings OR company OR corporate",
-        "commodities": "commodities OR gold OR oil OR metals"
-    }
-    
-    params = {
-        "q": queries.get(category, ""),
-        "apiKey": NEWS_API_KEY,
-        "language": "en",
-        "pageSize": page_size,
-        "sortBy": "publishedAt"
-    }
-    
-    try:
-        response = requests.get("https://newsapi.org/v2/everything", params=params)
-        return response.json()["articles"] if response.status_code == 200 else []
-    except Exception as e:
-        st.error(f"Error en API de noticias: {e}")
-        return []
+   queries = {
+       "financial": "financial OR market OR stock",
+       "macro": "macroeconomic OR economy OR gdp OR inflation",
+       "political": "politics OR government OR regulation",
+       "corporate": "earnings OR company OR corporate",
+       "commodities": "commodities OR gold OR oil OR metals"
+   }
+   
+   params = {
+       "q": queries.get(category, ""),
+       "apiKey": NEWS_API_KEY,
+       "language": "en",
+       "pageSize": page_size,
+       "sortBy": "publishedAt"
+   }
+   
+   try:
+       response = requests.get("https://newsapi.org/v2/everything", params=params)
+       return response.json()["articles"] if response.status_code == 200 else []
+   except Exception as e:
+       st.error(f"Error en API de noticias: {e}")
+       return []
 
 # Función para obtener datos fundamentales de un ticker
+# Funciones auxiliares
 def get_fundamental_data(ticker):
-    base_url = "https://financialmodelingprep.com/api/v3"
-    endpoints = {
-        "profile": f"/profile/{ticker}",
-        "metrics": f"/key-metrics-ttm/{ticker}",
-        "ratios": f"/ratios-ttm/{ticker}",
-        "financials": f"/income-statement/{ticker}?limit=1",
-        "balance": f"/balance-sheet-statement/{ticker}?limit=1"
-    }
-    
-    data = {}
-    try:
-        for key, endpoint in endpoints.items():
-            response = requests.get(
-                f"{base_url}{endpoint}",
-                params={"apikey": FMP_API_KEY}
-            )
-            if response.status_code == 200:
-                result = response.json()
-                if result:
-                    data[key] = result[0] if isinstance(result, list) else result
-                    
-        return data
-    except Exception as e:
-        st.error(f"Error en datos fundamentales: {e}")
-        return None
+   url = f"https://www.alphavantage.co/query"
+   endpoints = {
+       "overview": {
+           "function": "OVERVIEW",
+           "symbol": ticker,
+           "apikey": ALPHA_VANTAGE_KEY
+       },
+       "income": {
+           "function": "INCOME_STATEMENT",
+           "symbol": ticker,
+           "apikey": ALPHA_VANTAGE_KEY
+       },
+       "balance": {
+           "function": "BALANCE_SHEET",
+           "symbol": ticker,
+           "apikey": ALPHA_VANTAGE_KEY
+       },
+       "cash": {
+           "function": "CASH_FLOW",
+           "symbol": ticker,
+           "apikey": ALPHA_VANTAGE_KEY
+       }
+   }
+   
+   data = {}
+   for key, params in endpoints.items():
+       try:
+           response = requests.get(url, params=params)
+           if response.status_code == 200:
+               data[key] = response.json()
+           # Añadir delay para evitar límites de API
+           time.sleep(0.5)
+       except Exception as e:
+           st.error(f"Error obteniendo datos de {key}: {e}")
+   
+   return data
 
 # Función para obtener datos de FRED
 def get_fred_data(series_id, start_date=None, end_date=None):
-    try:
-        data = fred.get_series(series_id, start_date, end_date)
-        return pd.DataFrame(data, columns=['value'])
-    except Exception as e:
-        st.error(f"Error en datos FRED: {e}")
-        return None
+   try:
+       data = fred.get_series(series_id, start_date, end_date)
+       return pd.DataFrame(data, columns=['value'])
+   except Exception as e:
+       st.error(f"Error en datos FRED: {e}")
+       return None
 
 # ==================================================
 # Funciones de Análisis
@@ -346,26 +358,45 @@ def get_portfolio_data(tickers, period, interval):
 st.set_page_config(page_title="Trading Platform Pro V5+", layout="wide")
 st.title("📈 Trading Platform Pro V5+")
 
+# Mensaje en sidebar
+st.sidebar.markdown("---")
+st.sidebar.warning("""
+⚠️ PLATAFORMA EN DESARROLLO
+Esta es una versión demo - No usar para trading real.
+""")
+
+# Crear tabs principales
+tabs = st.tabs(["Trading", "Análisis Técnico", "Noticias", "Fundamental", "Macro"])
+
+with tabs[0]:
+   st.header("Panel de Trading")
+
 # Sidebar configuration
-with st.sidebar:
-    st.header("Configuración")
-    symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
-    symbols = [s.strip() for s in symbols_input.split(",")]
-    period = st.selectbox("Período", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=2)
-    interval = st.selectbox("Intervalo", ["1d", "5d", "1wk", "1mo"], index=0)
-    chart_type = st.selectbox("Tipo de Gráfico", ['Candlestick', 'OHLC', 'Line'])
-    use_log = st.checkbox("Escala Logarítmica", value=False)
-    confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
-    risk_free_rate = st.number_input("Tasa Libre de Riesgo Anual (%)", 0.0, 100.0, 2.0) / 100.0
+# Configuración de trading
+   col1, col2, col3 = st.columns(3)
+   with col1:
+       symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
+       period = st.selectbox("Período", ["1mo", "3mo", "6mo", "1y", "2y", "5y"])
+   with col2:
+       interval = st.selectbox("Intervalo", ["1d", "5d", "1wk", "1mo"])
+       chart_type = st.selectbox("Tipo de Gráfico", ['Candlestick', 'OHLC', 'Line'])
+   with col3:
+       confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95)
+       risk_free_rate = st.number_input("Tasa Libre de Riesgo (%)", 0.0, 100.0, 2.0)
    
-    available_indicators = [
-        'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
-        'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
-        'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
-        'ADX', 'CCI', 'DPO', 'TRIX',
-        'OBV', 'Force Index', 'EOM', 'Volume SMA'
-    ]
-    selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators)
+     # Configuración de análisis técnico
+   col1, col2 = st.columns(2)
+   with col1:
+       selected_symbol = st.selectbox("Activo", symbols)
+       use_log = st.checkbox("Escala Logarítmica")
+   with col2:
+       available_indicators = [
+           'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
+           'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
+           'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
+           'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index'
+       ]
+       selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators)
 
 # Obtener datos
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
@@ -631,157 +662,148 @@ if portfolio_data is not None and not portfolio_data.empty:
                 st.plotly_chart(indicator_fig, use_container_width=True)
 
     with tabs[2]:
-        st.header("📰 Centro de Noticias")
-        news_categories = {
-            "financial": "Financieras",
-            "macro": "Macroeconómicas",
-            "political": "Políticas",
-            "corporate": "Empresariales",
-            "commodities": "Commodities"
-        }
-        
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            selected_category = st.selectbox(
-                "Categoría",
-                options=list(news_categories.keys()),
-                format_func=lambda x: news_categories[x]
-            )
-           
-            news_count = st.slider("Número de noticias", 5, 20, 10)
-           
-        with col2:
-            news_articles = get_news_by_category(selected_category, news_count)
-            for article in news_articles:
-                with st.expander(article["title"]):
-                    st.write(f"**Fuente:** {article['source']['name']}")
-                    st.write(f"**Fecha:** {article['publishedAt'][:10]}")
-                    st.write(f"**Descripción:** {article['description']}")
-                    st.write(f"[Leer más]({article['url']})")
+   st.header("📰 Centro de Noticias")
+   news_categories = {
+       "financial": "Financieras",
+       "macro": "Macroeconómicas",
+       "political": "Políticas",
+       "corporate": "Empresariales",
+       "commodities": "Commodities"
+   }
+   
+   col1, col2 = st.columns([1, 3])
+   with col1:
+       selected_category = st.selectbox(
+           "Categoría",
+           options=list(news_categories.keys()),
+           format_func=lambda x: news_categories[x]
+       )
+       news_count = st.slider("Número de noticias", 5, 20, 10)
+   
+   with col2:
+       news_articles = get_news_by_category(selected_category, news_count)
+       for article in news_articles:
+           with st.expander(article["title"]):
+               st.write(f"**Fuente:** {article['source']['name']}")
+               st.write(f"**Fecha:** {article['publishedAt'][:10]}")
+               st.write(f"**Descripción:** {article['description']}")
+               st.write(f"[Leer más]({article['url']})")
 
     with tabs[3]:
-        st.header("📊 Análisis Fundamental")
-        
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            fundamental_ticker = st.text_input("Símbolo", "AAPL", key='fundamental_ticker')
-            if st.button("Analizar"):
-                fundamental_data = get_fundamental_data(fundamental_ticker)
-                
-                if fundamental_data:
-                    profile = fundamental_data.get('profile', {})
-                    metrics = fundamental_data.get('metrics', {})
-                    ratios = fundamental_data.get('ratios', {})
-                    financials = fundamental_data.get('financials', {})
-                    balance = fundamental_data.get('balance', {})
-                    
-                    # Métricas principales
-                    st.metric("Precio", f"${profile.get('price', 0):.2f}")
-                    st.metric("Market Cap", f"${profile.get('mktCap', 0):,.0f}")
-                    st.metric("Beta", f"{profile.get('beta', 0):.2f}")
-                    
-                    # Información general
-                    st.subheader("Información General")
-                    st.write(f"**Sector:** {profile.get('sector', 'N/A')}")
-                    st.write(f"**Industria:** {profile.get('industry', 'N/A')}")
-                    st.write(f"**CEO:** {profile.get('ceo', 'N/A')}")
-                    
-                    # Ratios financieros
-                    st.subheader("Ratios Financieros")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("P/E", f"{ratios.get('peRatioTTM', 0):.2f}")
-                        st.metric("ROE", f"{ratios.get('returnOnEquityTTM', 0):.2%}")
-                    with col2:
-                        st.metric("P/B", f"{ratios.get('priceToBookRatioTTM', 0):.2f}")
-                        st.metric("ROA", f"{ratios.get('returnOnAssetsTTM', 0):.2%}")
-                    with col3:
-                        st.metric("D/E", f"{ratios.get('debtEquityRatioTTM', 0):.2f}")
-                        st.metric("Margen Neto", f"{ratios.get('netProfitMarginTTM', 0):.2%}")
-                    
-                    # Estados financieros
-                    st.subheader("Estados Financieros (TTM)")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.write("**Estado de Resultados**")
-                        st.write(f"- Ingresos: ${financials.get('revenue', 0):,.0f}")
-                        st.write(f"- EBITDA: ${financials.get('ebitda', 0):,.0f}")
-                        st.write(f"- Beneficio Neto: ${financials.get('netIncome', 0):,.0f}")
-                    with col2:
-                        st.write("**Balance**")
-                        st.write(f"- Activos Totales: ${balance.get('totalAssets', 0):,.0f}")
-                        st.write(f"- Deuda Total: ${balance.get('totalDebt', 0):,.0f}")
-                        st.write(f"- Patrimonio: ${balance.get('totalEquity', 0):,.0f}")
-                    
-                    with st.expander("Descripción"):
-                        st.write(profile.get('description', 'No hay descripción disponible'))
+   st.header("📊 Análisis Fundamental")
+   
+   col1, col2 = st.columns([1, 2])
+   with col1:
+       fundamental_ticker = st.text_input("Símbolo", "AAPL")
+       if st.button("Analizar"):
+           fundamental_data = get_fundamental_data(fundamental_ticker)
+           
+           if fundamental_data and 'overview' in fundamental_data:
+               overview = fundamental_data['overview']
+               income = fundamental_data.get('income', {}).get('annualReports', [{}])[0]
+               balance = fundamental_data.get('balance', {}).get('annualReports', [{}])[0]
+               
+               # Métricas principales
+               st.metric("Precio", f"${overview.get('Price', 'N/A')}")
+               st.metric("Market Cap", f"${overview.get('MarketCapitalization', 'N/A')}")
+               st.metric("Beta", overview.get('Beta', 'N/A'))
+               
+               # Ratios
+               st.subheader("Ratios")
+               col1, col2, col3 = st.columns(3)
+               with col1:
+                   st.metric("P/E", overview.get('PERatio', 'N/A'))
+                   st.metric("ROE", overview.get('ReturnOnEquityTTM', 'N/A'))
+               with col2:
+                   st.metric("P/B", overview.get('PriceToBookRatio', 'N/A'))
+                   st.metric("Margen Op.", overview.get('OperatingMarginTTM', 'N/A'))
+               with col3:
+                   st.metric("Dividend Yield", overview.get('DividendYield', 'N/A'))
+                   st.metric("Payout Ratio", overview.get('PayoutRatio', 'N/A'))
+               
+               # Información financiera
+               st.subheader("Información Financiera")
+               col1, col2 = st.columns(2)
+               with col1:
+                   st.write("**Estado de Resultados**")
+                   st.write(f"- Ingresos: ${income.get('totalRevenue', 'N/A')}")
+                   st.write(f"- EBITDA: ${income.get('ebitda', 'N/A')}")
+                   st.write(f"- Beneficio Neto: ${income.get('netIncome', 'N/A')}")
+               with col2:
+                   st.write("**Balance**")
+                   st.write(f"- Activos: ${balance.get('totalAssets', 'N/A')}")
+                   st.write(f"- Deuda: ${balance.get('totalLiabilities', 'N/A')}")
+                   st.write(f"- Patrimonio: ${balance.get('totalShareholderEquity', 'N/A')}")
+               
+               with st.expander("Descripción"):
+                   st.write(overview.get('Description', 'No hay descripción disponible'))
+
 
     with tabs[4]:
-        st.header("📈 Indicadores Macroeconómicos")
-        
-        fred_indicators = {
-            "GDP": "PIB",
-            "UNRATE": "Desempleo",
-            "CPIAUCSL": "IPC",
-            "FEDFUNDS": "Tasa FED",
-            "DGS10": "Treasury 10Y",
-            "M2": "M2",
-            "INDPRO": "Producción Industrial",
-            "HOUST": "Construcción",
-            "PCE": "Consumo Personal",
-            "PAYEMS": "Nóminas no agrícolas"
-        }
-        
-        col1, col2 = st.columns([1, 3])
-        
-        with col1:
-            selected_indicator = st.selectbox(
-                "Indicador",
-                options=list(fred_indicators.keys()),
-                format_func=lambda x: fred_indicators[x]
-            )
+   st.header("📈 Indicadores Macroeconómicos")
+   
+   fred_indicators = {
+       "GDP": "PIB",
+       "UNRATE": "Desempleo",
+       "CPIAUCSL": "IPC",
+       "FEDFUNDS": "Tasa FED",
+       "DGS10": "Treasury 10Y",
+       "M2": "M2",
+       "INDPRO": "Producción Industrial",
+       "HOUST": "Construcción",
+       "PCE": "Consumo Personal",
+       "PAYEMS": "Nóminas no agrícolas"
+   }
+   
+   col1, col2 = st.columns([1, 3])
+   with col1:
+       selected_indicator = st.selectbox(
+           "Indicador",
+           options=list(fred_indicators.keys()),
+           format_func=lambda x: fred_indicators[x]
+       )
+       
+       date_range = st.selectbox(
+           "Período",
+           options=["1Y", "2Y", "5Y", "10Y", "MAX"],
+           index=0
+       )
+       
+       end_date = datetime.now()
+       start_date = end_date - pd.DateOffset(
+           years={"1Y": 1, "2Y": 2, "5Y": 5, "10Y": 10, "MAX": 50}[date_range]
+       )
+   
+   with col2:
+       fred_data = get_fred_data(selected_indicator, start_date, end_date)
+       if fred_data is not None and not fred_data.empty:
+           fig = go.Figure()
+           fig.add_trace(go.Scatter(
+               x=fred_data.index,
+               y=fred_data['value'],
+               mode='lines',
+               name=fred_indicators[selected_indicator]
+           ))
            
-            date_range = st.selectbox(
-                "Período",
-                options=["1Y", "2Y", "5Y", "10Y", "MAX"],
-                index=0
-            )
+           fig.update_layout(
+               title=f"{fred_indicators[selected_indicator]} ({selected_indicator})",
+               xaxis_title="Fecha",
+               yaxis_title="Valor",
+               height=500
+           )
            
-            end_date = datetime.now()
-            start_date = end_date - pd.DateOffset(
-                years={"1Y": 1, "2Y": 2, "5Y": 5, "10Y": 10, "MAX": 50}[date_range]
-            )
-        
-        with col2:
-            fred_data = get_fred_data(selected_indicator, start_date, end_date)
-            if fred_data is not None and not fred_data.empty:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=fred_data.index,
-                    y=fred_data['value'],
-                    mode='lines',
-                    name=fred_indicators[selected_indicator]
-                ))
-               
-                fig.update_layout(
-                    title=f"{fred_indicators[selected_indicator]} ({selected_indicator})",
-                    xaxis_title="Fecha",
-                    yaxis_title="Valor",
-                    height=500
-                )
-               
-                st.plotly_chart(fig, use_container_width=True)
-               
-                # Métricas
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Último", f"{fred_data['value'].iloc[-1]:.2f}")
-                with col2:
-                    st.metric("Promedio", f"{fred_data['value'].mean():.2f}")
-                with col3:
-                    st.metric("Máximo", f"{fred_data['value'].max():.2f}")
-                with col4:
-                    st.metric("Mínimo", f"{fred_data['value'].min():.2f}")
+           st.plotly_chart(fig, use_container_width=True)
+           
+           # Métricas
+           col1, col2, col3, col4 = st.columns(4)
+           with col1:
+               st.metric("Último", f"{fred_data['value'].iloc[-1]:.2f}")
+           with col2:
+               st.metric("Promedio", f"{fred_data['value'].mean():.2f}")
+           with col3:
+               st.metric("Máximo", f"{fred_data['value'].max():.2f}")
+           with col4:
+               st.metric("Mínimo", f"{fred_data['value'].min():.2f}")
 
 # Información adicional
 st.sidebar.markdown("---")
