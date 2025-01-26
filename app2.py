@@ -9,6 +9,35 @@ from scipy.spatial.distance import squareform
 from scipy.stats import norm
 import statsmodels.api as sm
 import ta
+import requests
+import time  # Añadido para usar time.sleep
+
+# API keys
+ALPHA_VANTAGE_KEY = "9M00TPMNCN2ZW1G5"
+FRED_API_KEY = "8617ec24219966a9191eb6a9d9d9fd24"
+
+# Función para obtener datos fundamentales
+def get_fundamental_data(ticker):
+    url = "https://www.alphavantage.co/query"
+    endpoints = {
+        "overview": {"function": "OVERVIEW", "symbol": ticker},
+        "income": {"function": "INCOME_STATEMENT", "symbol": ticker},
+        "balance": {"function": "BALANCE_SHEET", "symbol": ticker},
+        "cash": {"function": "CASH_FLOW", "symbol": ticker}
+    }
+    
+    data = {}
+    for key, params in endpoints.items():
+        params["apikey"] = ALPHA_VANTAGE_KEY
+        try:
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                data[key] = response.json()
+            time.sleep(0.2)  # Rate limiting
+        except Exception as e:
+            st.error(f"Error getting {key} data: {e}")
+    
+    return data
 
 # Función para obtener datos del portafolio
 def get_portfolio_data(tickers, period, interval):
@@ -414,7 +443,7 @@ if portfolio_data is not None and not portfolio_data.empty:
             
             st.dataframe(metrics_df, use_container_width=True, hide_index=True)
     
-    tab1, tab2 = st.tabs(["Análisis de Cartera", "Análisis Técnico"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Análisis de Cartera", "Análisis Técnico", "Análisis Fundamental", "Panel de Trading"])
     
     with tab1:
         st.subheader("Composición de la Cartera (HRP)")
@@ -602,6 +631,50 @@ if portfolio_data is not None and not portfolio_data.empty:
             
             st.write(f"Riesgo máximo: ${risk_total:.2f}")
             st.write(f"Beneficio objetivo: ${reward_total:.2f}")
+with tab3:
+    st.subheader("📊 Análisis Fundamental")
+    fundamental_ticker = st.text_input("Símbolo", "AAPL")
+    
+    if st.button("Analizar"):
+        fundamental_data = get_fundamental_data(fundamental_ticker)
+        
+        if fundamental_data and 'overview' in fundamental_data:
+            overview = fundamental_data['overview']
+            income = fundamental_data.get('income', {}).get('annualReports', [{}])[0]
+            balance = fundamental_data.get('balance', {}).get('annualReports', [{}])[0]
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Market Cap", f"${overview.get('MarketCapitalization', 'N/A')}")
+                st.metric("P/E Ratio", overview.get('PERatio', 'N/A'))
+                st.metric("Beta", overview.get('Beta', 'N/A'))
+            
+            with col2:
+                st.metric("ROE", f"{overview.get('ReturnOnEquityTTM', 'N/A')}%")
+                st.metric("Profit Margin", f"{overview.get('ProfitMargin', 'N/A')}%")
+                st.metric("Operating Margin", f"{overview.get('OperatingMarginTTM', 'N/A')}%")
+            
+            with col3:
+                st.metric("Dividend Yield", f"{overview.get('DividendYield', 'N/A')}%")
+                st.metric("Payout Ratio", overview.get('PayoutRatio', 'N/A'))
+                st.metric("52W High/Low", f"${overview.get('52WeekHigh', 'N/A')}/${overview.get('52WeekLow', 'N/A')}")
+
+            # Financial Statements
+            st.subheader("Estados Financieros")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write("**Income Statement**")
+                st.write(f"Revenue: ${income.get('totalRevenue', 'N/A')}")
+                st.write(f"Gross Profit: ${income.get('grossProfit', 'N/A')}")
+                st.write(f"Net Income: ${income.get('netIncome', 'N/A')}")
+            
+            with col2:
+                st.write("**Balance Sheet**")
+                st.write(f"Total Assets: ${balance.get('totalAssets', 'N/A')}")
+                st.write(f"Total Liabilities: ${balance.get('totalLiabilities', 'N/A')}")
+                st.write(f"Total Equity: ${balance.get('totalShareholderEquity', 'N/A')}")
 
 # Información adicional
 st.sidebar.markdown("---")
