@@ -58,6 +58,30 @@ def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
     forecast = model.predict(X.iloc[-1:]).iloc[0]
     return np.sqrt(forecast) * scale_factor
 
+def calculate_ichimoku(df, symbol):
+    high = df[f'{symbol}_High']
+    low = df[f'{symbol}_Low']
+    close = df[f'{symbol}_Close']
+    
+    nine_period_high = high.rolling(window=9).max()
+    nine_period_low = low.rolling(window=9).min()
+    df[f'{symbol}_tenkan_sen'] = (nine_period_high + nine_period_low) / 2
+    
+    period26_high = high.rolling(window=26).max()
+    period26_low = low.rolling(window=26).min()
+    df[f'{symbol}_kijun_sen'] = (period26_high + period26_low) / 2
+    
+    df[f'{symbol}_senkou_span_a'] = ((df[f'{symbol}_tenkan_sen'] + 
+        df[f'{symbol}_kijun_sen']) / 2).shift(26)
+    
+    period52_high = high.rolling(window=52).max()
+    period52_low = low.rolling(window=52).min()
+    df[f'{symbol}_senkou_span_b'] = ((period52_high + period52_low) / 2).shift(26)
+    
+    df[f'{symbol}_chikou_span'] = close.shift(-26)
+    
+    return df
+
 def quasi_diag(link):
     link = link.astype(int)
     sort_ix = []
@@ -91,6 +115,58 @@ def hierarchical_risk_parity(returns):
         st.error(f"Error en cálculo HRP: {e}")
         return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
 
+def calculate_technical_indicators(df, symbol):
+    if df is None or df.empty:
+        return pd.DataFrame()
+        
+    df = df.copy()
+    close = df[f'{symbol}_Close']
+    high = df[f'{symbol}_High']
+    low = df[f'{symbol}_Low']
+    volume = df[f'{symbol}_Volume']
+    
+    # Basic indicators
+    df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
+        high=high, low=low, close=close, volume=volume)
+    df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close, window=20)
+    df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(close, window=50)
+    df[f'{symbol}_SMA20'] = close.rolling(window=20).mean()
+    df[f'{symbol}_SMA50'] = close.rolling(window=50).mean()
+    
+    # Momentum indicators
+    df[f'{symbol}_RSI'] = ta.momentum.rsi(close)
+    df[f'{symbol}_MACD'] = ta.trend.macd_diff(close)
+    df[f'{symbol}_MACD_signal'] = ta.trend.macd_signal(close)
+    df[f'{symbol}_MACD_line'] = ta.trend.macd(close)
+    df[f'{symbol}_Stoch_RSI'] = ta.momentum.stochrsi(close)
+    df[f'{symbol}_MFI'] = ta.volume.money_flow_index(high, low, close, volume)
+    df[f'{symbol}_TSI'] = ta.momentum.tsi(close)
+    
+    # Trend indicators
+    df[f'{symbol}_ADX'] = ta.trend.adx(high, low, close)
+    df[f'{symbol}_CCI'] = ta.trend.cci(high, low, close)
+    df[f'{symbol}_DPO'] = ta.trend.dpo(close)
+    df[f'{symbol}_TRIX'] = ta.trend.trix(close)
+    
+    # Volatility indicators
+    df[f'{symbol}_BB_upper'] = ta.volatility.bollinger_hband(close)
+    df[f'{symbol}_BB_middle'] = ta.volatility.bollinger_mavg(close)
+    df[f'{symbol}_BB_lower'] = ta.volatility.bollinger_lband(close)
+    df[f'{symbol}_ATR'] = ta.volatility.average_true_range(high, low, close)
+    df[f'{symbol}_KC_upper'] = ta.volatility.keltner_channel_hband(high, low, close)
+    df[f'{symbol}_KC_lower'] = ta.volatility.keltner_channel_lband(high, low, close)
+    
+    # Volume indicators
+    df[f'{symbol}_OBV'] = ta.volume.on_balance_volume(close, volume)
+    df[f'{symbol}_Force_Index'] = ta.volume.force_index(close, volume)
+    df[f'{symbol}_EOM'] = ta.volume.ease_of_movement(high, low, volume)
+    df[f'{symbol}_Volume_SMA'] = volume.rolling(window=20).mean()
+    
+    # Add Ichimoku indicators
+    df = calculate_ichimoku(df, symbol)
+    
+    return df.fillna(method='ffill').fillna(method='bfill')
+
 def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplier=3):
     returns = pd.Series(np.log(data[f'{symbol}_Close']).diff().dropna())
     conditional_vol = calculate_har_volatility(returns)
@@ -102,33 +178,6 @@ def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplie
     take_profit = current_price + (risk * risk_multiplier)
     
     return stop_loss, take_profit, conditional_vol
-
-def calculate_technical_indicators(df, symbol):
-    if df is None or df.empty:
-        return pd.DataFrame()
-        
-    df = df.copy()
-    close = df[f'{symbol}_Close']
-    high = df[f'{symbol}_High']
-    low = df[f'{symbol}_Low']
-    volume = df[f'{symbol}_Volume']
-    
-    df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
-        high=high, low=low, close=close, volume=volume)
-    df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close, window=20)
-    df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(close, window=50)
-    df[f'{symbol}_SMA20'] = close.rolling(window=20).mean()
-    df[f'{symbol}_SMA50'] = close.rolling(window=50).mean()
-    df[f'{symbol}_RSI'] = ta.momentum.rsi(close)
-    df[f'{symbol}_MACD'] = ta.trend.macd_diff(close)
-    df[f'{symbol}_BB_upper'] = ta.volatility.bollinger_hband(close)
-    df[f'{symbol}_BB_middle'] = ta.volatility.bollinger_mavg(close)
-    df[f'{symbol}_BB_lower'] = ta.volatility.bollinger_lband(close)
-    df[f'{symbol}_ADX'] = ta.trend.adx(high, low, close)
-    df[f'{symbol}_OBV'] = ta.volume.on_balance_volume(close, volume)
-    df[f'{symbol}_ATR'] = ta.volatility.average_true_range(high, low, close)
-    
-    return df.fillna(method='ffill').fillna(method='bfill')
 
 def calculate_var_cvar(returns, confidence_level=0.95):
     try:
@@ -215,9 +264,107 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
         st.error(f"Error en cálculo de métricas: {e}")
         return None
 
+def plot_indicators(fig, technical_data, selected_symbol, selected_indicators):
+    for indicator in selected_indicators:
+        if indicator == 'Ichimoku':
+            fig.add_trace(go.Scatter(
+                x=technical_data.index,
+                y=technical_data[f'{selected_symbol}_tenkan_sen'],
+                name='Tenkan-sen',
+                line=dict(color='blue', dash='dash')
+            ))
+            fig.add_trace(go.Scatter(
+                x=technical_data.index,
+                y=technical_data[f'{selected_symbol}_kijun_sen'],
+                name='Kijun-sen',
+                line=dict(color='red', dash='dash')
+            ))
+            fig.add_trace(go.Scatter(
+                x=technical_data.index,
+                y=technical_data[f'{selected_symbol}_senkou_span_a'],
+                name='Senkou Span A',
+                fill=None,
+                line=dict(color='rgba(76,175,80,0.5)')
+            ))
+            fig.add_trace(go.Scatter(
+                x=technical_data.index,
+                y=technical_data[f'{selected_symbol}_senkou_span_b'],
+                name='Senkou Span B',
+                fill='tonexty',
+                line=dict(color='rgba(255,152,0,0.5)')
+            ))
+            fig.add_trace(go.Scatter(
+                x=technical_data.index,
+                y=technical_data[f'{selected_symbol}_chikou_span'],
+                name='Chikou Span',
+                line=dict(color='purple')
+            ))
+        elif indicator in ['EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP']:
+            fig.add_trace(go.Scatter(
+                x=technical_data.index,
+                y=technical_data[f'{selected_symbol}_{indicator}'],
+                name=indicator,
+                line=dict(dash='dash')
+            ))
+        elif indicator == 'Bollinger Bands':
+            for band in ['upper', 'middle', 'lower']:
+                fig.add_trace(go.Scatter(
+                    x=technical_data.index,
+                    y=technical_data[f'{selected_symbol}_BB_{band}'],
+                    name=f'BB {band}',
+                    line=dict(dash='dot')
+                ))
+        elif indicator == 'Keltner Channels':
+            for band in ['upper', 'lower']:
+                fig.add_trace(go.Scatter(
+                    x=technical_data.index,
+                    y=technical_data[f'{selected_symbol}_KC_{band}'],
+                    name=f'KC {band}',
+                    line=dict(dash='dot')
+                ))
+    return fig
+
+def create_indicator_subplot(technical_data, selected_symbol, indicator):
+    fig = go.Figure()
+    
+    if indicator in ['RSI', 'Stoch RSI', 'MFI']:
+        y_data = technical_data[f'{selected_symbol}_{indicator.replace(" ", "_")}']
+        fig.add_trace(go.Scatter(x=technical_data.index, y=y_data, name=indicator))
+        fig.add_hline(y=70, line_dash="dash", line_color="red")
+        fig.add_hline(y=30, line_dash="dash", line_color="green")
+    elif indicator == 'MACD':
+        fig.add_trace(go.Scatter(
+            x=technical_data.index,
+            y=technical_data[f'{selected_symbol}_MACD_line'],
+            name='MACD Line'
+        ))
+        fig.add_trace(go.Scatter(
+            x=technical_data.index,
+            y=technical_data[f'{selected_symbol}_MACD_signal'],
+            name='Signal Line'
+        ))
+        fig.add_trace(go.Bar(
+            x=technical_data.index,
+            y=technical_data[f'{selected_symbol}_MACD'],
+            name='MACD Histogram'
+        ))
+    else:
+        y_data = technical_data[f'{selected_symbol}_{indicator.replace(" ", "_")}']
+        fig.add_trace(go.Scatter(x=technical_data.index, y=y_data, name=indicator))
+    
+    fig.update_layout(
+        title=f"{indicator} - {selected_symbol}",
+        xaxis_title="Fecha",
+        yaxis_title=indicator,
+        height=300,
+        yaxis_type='log'
+    )
+    
+    return fig
+
 # Configuración de la página
-st.set_page_config(page_title="Trading Platform Pro V4", layout="wide")
-st.title("📈 Trading Platform Pro V4")
+st.set_page_config(page_title="Trading Platform Pro V5", layout="wide")
+st.title("📈 Trading Platform Pro V5")
 
 # Sidebar
 with st.sidebar:
@@ -228,13 +375,15 @@ with st.sidebar:
     period = st.selectbox("Período", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=2)
     interval = st.selectbox("Intervalo", ["1d", "5d", "1wk", "1mo"], index=0)
     chart_type = st.selectbox("Tipo de Gráfico", ['Candlestick', 'OHLC', 'Line'])
-    use_log = st.checkbox("Escala Logarítmica", value=False)
     confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
     risk_free_rate = st.number_input("Tasa Libre de Riesgo Anual (%)", 0.0, 100.0, 2.0) / 100.0
     
     available_indicators = [
         'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
-        'RSI', 'MACD', 'Bollinger Bands', 'ADX', 'OBV', 'ATR'
+        'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
+        'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
+        'ADX', 'CCI', 'DPO', 'TRIX',
+        'OBV', 'Force Index', 'EOM', 'Volume SMA'
     ]
     selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators)
 
@@ -293,7 +442,7 @@ if portfolio_data is not None and not portfolio_data.empty:
             xaxis_title="Fecha",
             yaxis_title="Retorno Acumulado",
             height=500,
-            yaxis_type='log' if use_log else 'linear'
+            yaxis_type='log'
         )
         st.plotly_chart(fig, use_container_width=True)
     
@@ -328,53 +477,21 @@ if portfolio_data is not None and not portfolio_data.empty:
                 name=selected_symbol
             ))
         
-        for indicator in selected_indicators:
-            if indicator in ['EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP']:
-                fig.add_trace(go.Scatter(
-                    x=technical_data.index,
-                    y=technical_data[f'{selected_symbol}_{indicator}'],
-                    name=indicator,
-                    line=dict(dash='dash')
-                ))
-            elif indicator == 'Bollinger Bands':
-                for band in ['upper', 'middle', 'lower']:
-                    fig.add_trace(go.Scatter(
-                        x=technical_data.index,
-                        y=technical_data[f'{selected_symbol}_BB_{band}'],
-                        name=f'BB {band}',
-                        line=dict(dash='dot')
-                    ))
+        plot_indicators(fig, technical_data, selected_symbol, selected_indicators)
         
         fig.update_layout(
             title=f"Análisis Técnico - {selected_symbol}",
             xaxis_title="Fecha",
             yaxis_title="Precio",
             height=600,
-            yaxis_type='log' if use_log else 'linear'
+            yaxis_type='log'
         )
         st.plotly_chart(fig, use_container_width=True)
         
         # Gráficos separados para indicadores
         for indicator in selected_indicators:
-            if indicator in ['RSI', 'MACD', 'ADX', 'OBV', 'ATR']:
-                indicator_fig = go.Figure()
-                indicator_fig.add_trace(go.Scatter(
-                    x=technical_data.index,
-                    y=technical_data[f'{selected_symbol}_{indicator}'],
-                    name=indicator
-                ))
-                
-                indicator_fig.update_layout(
-                    title=f"{indicator} - {selected_symbol}",
-                    xaxis_title="Fecha",
-                    yaxis_title=indicator,
-                    height=300
-                )
-                
-                if indicator == 'RSI':
-                    indicator_fig.add_hline(y=70, line_dash="dash", line_color="red")
-                    indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
-                
+            if indicator in ['RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI', 'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index', 'EOM']:
+                indicator_fig = create_indicator_subplot(technical_data, selected_symbol, indicator)
                 st.plotly_chart(indicator_fig, use_container_width=True)
     
     # Panel de Trading
@@ -408,32 +525,31 @@ if portfolio_data is not None and not portfolio_data.empty:
                     name=selected_symbol
                 ))
 
-            # Añadir líneas de stop loss y take profit simplificadas
-            fig.add_hline(
-                y=stop_loss,
-                line_color="red",
-                line_dash="dash",
-                annotation_text=f"Stop Loss (${stop_loss:.2f})",
-                annotation_position="top right"
-            )
+            # Añadir líneas de stop loss y take profit como traces
+            fig.add_trace(go.Scatter(
+                x=portfolio_data.index,
+                y=[stop_loss] * len(portfolio_data.index),
+                mode='lines',
+                name='Stop Loss',
+                line=dict(color='red', dash='dash'),
+                showlegend=True
+            ))
 
-            fig.add_hline(
-                y=take_profit,
-                line_color="green",
-                line_dash="dash",
-                annotation_text=f"Take Profit {risk_multiplier}x (${take_profit:.2f})",
-                annotation_position="top right"
-            )
+            fig.add_trace(go.Scatter(
+                x=portfolio_data.index,
+                y=[take_profit] * len(portfolio_data.index),
+                mode='lines',
+                name='Take Profit',
+                line=dict(color='green', dash='dash'),
+                showlegend=True
+            ))
             
-            # Configuración mejorada del layout
             fig.update_layout(
                 title=f"Trading View - {selected_symbol}",
                 xaxis_title="Fecha",
                 yaxis_title="Precio",
                 height=600,
-                margin=dict(r=150),  # Aumentar margen derecho para las anotaciones
-                showlegend=True,
-                yaxis_type='log' if use_log else 'linear'
+                yaxis_type='log'
             )
             
             st.plotly_chart(fig, use_container_width=True)
@@ -477,6 +593,6 @@ Características:
 - Stop Loss/Take Profit dinámicos con HAR
 - Ratio de riesgo/beneficio ajustable
 - Múltiples tipos de gráficos
-- Escala logarítmica opcional
+- Escala logarítmica en todos los gráficos
 """)
 st.sidebar.warning("Plataforma de demostración - No usar para trading real.")
