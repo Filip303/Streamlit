@@ -317,405 +317,395 @@ with st.sidebar:
     confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
     risk_free_rate = st.number_input("Tasa Libre de Riesgo Anual (%)", 0.0, 100.0, 2.0) / 100.0
    
-   available_indicators = [
-       'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
-       'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
-       'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
-       'ADX', 'CCI', 'DPO', 'TRIX',
-       'OBV', 'Force Index', 'EOM', 'Volume SMA'
-   ]
-   selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators)
+    available_indicators = [
+        'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
+        'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
+        'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
+        'ADX', 'CCI', 'DPO', 'TRIX',
+        'OBV', 'Force Index', 'EOM', 'Volume SMA'
+    ]
+    selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators)
 
 # Obtener datos
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
-   close_cols = [col for col in portfolio_data.columns if col.endswith('_Close')]
-   returns = portfolio_data[close_cols].pct_change().dropna()
-   returns.columns = [col.replace('_Close', '') for col in returns.columns]
-   weights = hierarchical_risk_parity(returns)
-   metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
+    close_cols = [col for col in portfolio_data.columns if col.endswith('_Close')]
+    returns = portfolio_data[close_cols].pct_change().dropna()
+    returns.columns = [col.replace('_Close', '') for col in returns.columns]
+    weights = hierarchical_risk_parity(returns)
+    metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
 
-   # Crear tabs principales
-   tabs = st.tabs(["Trading", "Análisis Técnico", "Noticias", "Fundamental", "Macro"])
+    # Crear tabs principales
+    tabs = st.tabs(["Trading", "Análisis Técnico", "Noticias", "Fundamental", "Macro"])
 
-   with tabs[0]:
-       st.header("Panel de Trading")
-       
-       # Panel de Métricas
-       with st.expander("📊 Panel de Métricas", expanded=True):
-           if metrics:
-               metrics_df = pd.DataFrame(columns=['Métrica', 'Portfolio', 'SPY', 'URTH'])
-               metrics_df['Métrica'] = ['Sharpe Ratio', 'Sortino Ratio', 'Max Drawdown', 'VaR', 'CVaR']
+    with tabs[0]:
+        st.header("Panel de Trading")
+        
+        # Panel de Métricas
+        with st.expander("📊 Panel de Métricas", expanded=True):
+            if metrics:
+                metrics_df = pd.DataFrame(columns=['Métrica', 'Portfolio', 'SPY', 'URTH'])
+                metrics_df['Métrica'] = ['Sharpe Ratio', 'Sortino Ratio', 'Max Drawdown', 'VaR', 'CVaR']
                
-               for name in ['Portfolio', 'SPY', 'URTH']:
-                   if name in metrics:
-                       metrics_df[name] = [
-                           f"{metrics[name]['Sharpe']:.2f}",
-                           f"{metrics[name]['Sortino']:.2f}",
-                           f"{metrics[name]['Max Drawdown']:.2%}",
-                           f"{metrics[name]['VaR']:.2%}",
-                           f"{metrics[name]['CVaR']:.2%}"
-                       ]
+                for name in ['Portfolio', 'SPY', 'URTH']:
+                    if name in metrics:
+                        metrics_df[name] = [
+                            f"{metrics[name]['Sharpe']:.2f}",
+                            f"{metrics[name]['Sortino']:.2f}",
+                            f"{metrics[name]['Max Drawdown']:.2%}",
+                            f"{metrics[name]['VaR']:.2%}",
+                            f"{metrics[name]['CVaR']:.2%}"
+                        ]
                
-               st.dataframe(metrics_df, use_container_width=True, hide_index=True)
-       
-       selected_symbol = st.selectbox("Seleccionar Activo para Trading", symbols)
-       risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", 
-                                 min_value=2.0, max_value=5.0, value=3.0, step=0.1)
-       
-       stop_loss, take_profit, volatility = calculate_dynamic_levels(
-           portfolio_data, selected_symbol, confidence_level, risk_multiplier)
-       
-       current_price = portfolio_data[f'{selected_symbol}_Close'].iloc[-1]
-       
-       col1, col2 = st.columns([7, 3])
-       
-       with col1:
-           fig = go.Figure()
+                st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+        
+        selected_symbol = st.selectbox("Seleccionar Activo para Trading", symbols)
+        risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", 
+                                  min_value=2.0, max_value=5.0, value=3.0, step=0.1)
+        
+        stop_loss, take_profit, volatility = calculate_dynamic_levels(
+            portfolio_data, selected_symbol, confidence_level, risk_multiplier)
+        
+        current_price = portfolio_data[f'{selected_symbol}_Close'].iloc[-1]
+        
+        col1, col2 = st.columns([7, 3])
+        
+        with col1:
+            fig = go.Figure()
            
-           if chart_type == 'Candlestick':
-               fig.add_trace(go.Candlestick(
-                   x=portfolio_data.index,
-                   open=portfolio_data[f'{selected_symbol}_Open'],
-                   high=portfolio_data[f'{selected_symbol}_High'],
-                   low=portfolio_data[f'{selected_symbol}_Low'],
-                   close=portfolio_data[f'{selected_symbol}_Close'],
-                   name=selected_symbol
-               ))
-           else:
-               fig.add_trace(go.Scatter(
-                   x=portfolio_data.index,
-                   y=portfolio_data[f'{selected_symbol}_Close'],
-                   name=selected_symbol
-               ))
+            if chart_type == 'Candlestick':
+                fig.add_trace(go.Candlestick(
+                    x=portfolio_data.index,
+                    open=portfolio_data[f'{selected_symbol}_Open'],
+                    high=portfolio_data[f'{selected_symbol}_High'],
+                    low=portfolio_data[f'{selected_symbol}_Low'],
+                    close=portfolio_data[f'{selected_symbol}_Close'],
+                    name=selected_symbol
+                ))
+            else:
+                fig.add_trace(go.Scatter(
+                    x=portfolio_data.index,
+                    y=portfolio_data[f'{selected_symbol}_Close'],
+                    name=selected_symbol
+                ))
 
-           fig.add_trace(go.Scatter(
-               x=portfolio_data.index,
-               y=[stop_loss] * len(portfolio_data.index),
-               mode='lines',
-               name='Stop Loss',
-               line=dict(color='red', dash='dash'),
-               showlegend=True
-           ))
+            fig.add_trace(go.Scatter(
+                x=portfolio_data.index,
+                y=[stop_loss] * len(portfolio_data.index),
+                mode='lines',
+                name='Stop Loss',
+                line=dict(color='red', dash='dash'),
+                showlegend=True
+            ))
 
-           fig.add_trace(go.Scatter(
-               x=portfolio_data.index,
-               y=[take_profit] * len(portfolio_data.index),
-               mode='lines',
-               name='Take Profit',
-               line=dict(color='green', dash='dash'),
-               showlegend=True
-           ))
+            fig.add_trace(go.Scatter(
+                x=portfolio_data.index,
+                y=[take_profit] * len(portfolio_data.index),
+                mode='lines',
+                name='Take Profit',
+                line=dict(color='green', dash='dash'),
+                showlegend=True
+            ))
            
-           fig.update_layout(
-               title=f"Trading View - {selected_symbol}",
-               xaxis_title="Fecha",
-               yaxis_title="Precio",
-               height=600,
-               yaxis_type='log' if use_log else 'linear'
-           )
+            fig.update_layout(
+                title=f"Trading View - {selected_symbol}",
+                xaxis_title="Fecha",
+                yaxis_title="Precio",
+                height=600,
+                yaxis_type='log' if use_log else 'linear'
+            )
            
-           st.plotly_chart(fig, use_container_width=True)
-       
-       with col2:
-           if info_dict.get(selected_symbol):
-               info = info_dict[selected_symbol]
-               st.write(f"**Nombre:** {info.get('longName', 'N/A')}")
-               st.write(f"**Sector:** {info.get('sector', 'N/A')}")
-               st.write(f"**Industria:** {info.get('industry', 'N/A')}")
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            if info_dict.get(selected_symbol):
+                info = info_dict[selected_symbol]
+                st.write(f"**Nombre:** {info.get('longName', 'N/A')}")
+                st.write(f"**Sector:** {info.get('sector', 'N/A')}")
+                st.write(f"**Industria:** {info.get('industry', 'N/A')}")
            
-           st.metric("Precio Actual", f"${current_price:.2f}")
-           st.metric("Volatilidad", f"{volatility:.2%}")
-           st.metric("Stop Loss", f"${stop_loss:.2f}", 
-                    f"{(stop_loss/current_price - 1):.2%}")
-           st.metric("Take Profit", f"${take_profit:.2f}", 
-                    f"{(take_profit/current_price - 1):.2%}")
+            st.metric("Precio Actual", f"${current_price:.2f}")
+            st.metric("Volatilidad", f"{volatility:.2%}")
+            st.metric("Stop Loss", f"${stop_loss:.2f}", 
+                     f"{(stop_loss/current_price - 1):.2%}")
+            st.metric("Take Profit", f"${take_profit:.2f}", 
+                     f"{(take_profit/current_price - 1):.2%}")
            
-           risk_amount = current_price - stop_loss
-           reward_amount = take_profit - current_price
-           risk_reward_ratio = reward_amount / risk_amount if risk_amount != 0 else float('inf')
+            risk_amount = current_price - stop_loss
+            reward_amount = take_profit - current_price
+            risk_reward_ratio = reward_amount / risk_amount if risk_amount != 0 else float('inf')
            
-           st.metric("Ratio Riesgo/Beneficio", f"{risk_reward_ratio:.2f}")
+            st.metric("Ratio Riesgo/Beneficio", f"{risk_reward_ratio:.2f}")
            
-           quantity = st.number_input("Cantidad", min_value=1, value=1)
-           total = current_price * quantity
-           st.write(f"Total de la operación: ${total:,.2f}")
+            quantity = st.number_input("Cantidad", min_value=1, value=1)
+            total = current_price * quantity
+            st.write(f"Total de la operación: ${total:,.2f}")
            
-           risk_total = (current_price - stop_loss) * quantity
-           reward_total = (take_profit - current_price) * quantity
+            risk_total = (current_price - stop_loss) * quantity
+            reward_total = (take_profit - current_price) * quantity
            
-           st.write(f"Riesgo máximo: ${risk_total:.2f}")
-           st.write(f"Beneficio objetivo: ${reward_total:.2f}")
+            st.write(f"Riesgo máximo: ${risk_total:.2f}")
+            st.write(f"Beneficio objetivo: ${reward_total:.2f}")
 
-   with tabs[1]:
-       st.header("Análisis Técnico")
-       selected_symbol = st.selectbox("Seleccionar Activo", symbols, key='technical_symbol')
-       technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
-       
-       fig = go.Figure()
-       
-       if chart_type == 'Candlestick':
-           fig.add_trace(go.Candlestick(
-               x=technical_data.index,
-               open=technical_data[f'{selected_symbol}_Open'],
-               high=technical_data[f'{selected_symbol}_High'],
-               low=technical_data[f'{selected_symbol}_Low'],
-               close=technical_data[f'{selected_symbol}_Close'],
-               name=selected_symbol
-           ))
-       elif chart_type == 'OHLC':
-           fig.add_trace(go.Ohlc(
-               x=technical_data.index,
-               open=technical_data[f'{selected_symbol}_Open'],
-               high=technical_data[f'{selected_symbol}_High'],
-               low=technical_data[f'{selected_symbol}_Low'],
-               close=technical_data[f'{selected_symbol}_Close'],
-               name=selected_symbol
-           ))
-       else:
-           fig.add_trace(go.Scatter(
-               x=technical_data.index,
-               y=technical_data[f'{selected_symbol}_Close'],
-               name=selected_symbol
-           ))
-       
-       for indicator in selected_indicators:
-           if indicator in ['EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP']:
-               fig.add_trace(go.Scatter(
-                   x=technical_data.index,
-                   y=technical_data[f'{selected_symbol}_{indicator}'],
-                   name=indicator,
-                   line=dict(dash='dash')
-               ))
-           elif indicator == 'Bollinger Bands':
-               for band in ['upper', 'middle', 'lower']:
-                   fig.add_trace(go.Scatter(
-                       x=technical_data.index,
-                       y=technical_data[f'{selected_symbol}_BB_{band}'],
-                       name=f'BB {band}',
-                       line=dict(dash='dot')
-                   ))
-           elif indicator == 'Keltner Channels':
-               for band in ['upper', 'lower']:
-                   fig.add_trace(go.Scatter(
-                       x=technical_data.index,
-                       y=technical_data[f'{selected_symbol}_KC_{band}'],
-                       name=f'KC {band}',
-                       line=dict(dash='dot')
-                   ))
-           elif indicator == 'Ichimoku':
-               fig.add_trace(go.Scatter(
-                   x=technical_data.index,
-                   y=technical_data[f'{selected_symbol}_tenkan_sen'],
-                   name='Tenkan-sen',
-                   line=dict(color='blue', dash='dash')
-               ))
-               fig.add_trace(go.Scatter(
-                   x=technical_data.index,
-                   y=technical_data[f'{selected_symbol}_kijun_sen'],
-                   name='Kijun-sen',
-                   line=dict(color='red', dash='dash')
-               ))
-               fig.add_trace(go.Scatter(
-                   x=technical_data.index,
-                   y=technical_data[f'{selected_symbol}_senkou_span_a'],
-                   name='Senkou Span A',
-                   fill=None,
-                   line=dict(color='rgba(76,175,80,0.5)')
-               ))
-               fig.add_trace(go.Scatter(
-                   x=technical_data.index,
-                   y=technical_data[f'{selected_symbol}_senkou_span_b'],
-                   name='Senkou Span B',
-                   fill='tonexty',
-                   line=dict(color='rgba(255,152,0,0.5)')
-               ))
-               fig.add_trace(go.Scatter(
-                   x=technical_data.index,
-                   y=technical_data[f'{selected_symbol}_chikou_span'],
-                   name='Chikou Span',
-                   line=dict(color='purple')
-               ))
-       
-       fig.update_layout(
-           title=f"Análisis Técnico - {selected_symbol}",
-           xaxis_title="Fecha",
-           yaxis_title="Precio",
-           height=600,
-           yaxis_type='log' if use_log else 'linear'
-       )
-       st.plotly_chart(fig, use_container_width=True)
-       
-       # Gráficos separados para indicadores
-       for indicator in selected_indicators:
-           if indicator in ['RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI', 'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index', 'EOM']:
-               indicator_fig = go.Figure()
-               
-               if indicator == 'MACD':
-                   indicator_fig.add_trace(go.Scatter(
-                       x=technical_data.index,
-                       y=technical_data[f'{selected_symbol}_MACD_line'],
-                       name='MACD Line'
-                   ))
-                   indicator_fig.add_trace(go.Scatter(
-                       x=technical_data.index,
-                       y=technical_data[f'{selected_symbol}_MACD_signal'],
-                       name='Signal Line'
-                   ))
-                   indicator_fig.add_trace(go.Bar(
-                       x=technical_data.index,
-                       y=technical_data[f'{selected_symbol}_MACD'],
-                       name='MACD Histogram'
-                   ))
-               else:
-                   y_data = technical_data[f'{selected_symbol}_{indicator.replace(" ", "_")}']
-                   indicator_fig.add_trace(go.Scatter(
-                       x=technical_data.index,
-                       y=y_data,
-                       name=indicator
-                   ))
-               
-               indicator_fig.update_layout(
-                   title=f"{indicator} - {selected_symbol}",
-                   xaxis_title="Fecha",
-                   yaxis_title=indicator,
-                   height=300
-               )
-               
-               if indicator in ['RSI', 'Stoch RSI', 'MFI']:
-                   indicator_fig.add_hline(y=70, line_dash="dash", line_color="red")
-                   indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
-               
-               st.plotly_chart(indicator_fig, use_container_width=True)
+    with tabs[1]:
+        st.header("Análisis Técnico")
+        selected_symbol = st.selectbox("Seleccionar Activo", symbols, key='technical_symbol')
+        technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
+        
+        fig = go.Figure()
+        
+        if chart_type == 'Candlestick':
+            fig.add_trace(go.Candlestick(
+                x=technical_data.index,
+                open=technical_data[f'{selected_symbol}_Open'],
+                high=technical_data[f'{selected_symbol}_High'],
+                low=technical_data[f'{selected_symbol}_Low'],
+                close=technical_data[f'{selected_symbol}_Close'],
+                name=selected_symbol
+            ))
+        elif chart_type == 'OHLC':
+            fig.add_trace(go.Ohlc(
+                x=technical_data.index,
+                open=technical_data[f'{selected_symbol}_Open'],
+                high=technical_data[f'{selected_symbol}_High'],
+                low=technical_data[f'{selected_symbol}_Low'],
+                close=technical_data[f'{selected_symbol}_Close'],
+                name=selected_symbol
+            ))
+        else:
+            fig.add_trace(go.Scatter(
+                x=technical_data.index,
+                y=technical_data[f'{selected_symbol}_Close'],
+                name=selected_symbol
+            ))
+        
+        for indicator in selected_indicators:
+            if indicator in ['EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP']:
+                fig.add_trace(go.Scatter(
+                    x=technical_data.index,
+                    y=technical_data[f'{selected_symbol}_{indicator}'],
+                    name=indicator,
+                    line=dict(dash='dash')
+                ))
+            elif indicator == 'Bollinger Bands':
+                for band in ['upper', 'middle', 'lower']:
+                    fig.add_trace(go.Scatter(
+                        x=technical_data.index,
+                        y=technical_data[f'{selected_symbol}_BB_{band}'],
+                        name=f'BB {band}',
+                        line=dict(dash='dot')
+                    ))
+            elif indicator == 'Keltner Channels':
+                for band in ['upper', 'lower']:
+                    fig.add_trace(go.Scatter(
+                        x=technical_data.index,
+                        y=technical_data[f'{selected_symbol}_KC_{band}'],
+                        name=f'KC {band}',
+                        line=dict(dash='dot')
+                    ))
+            elif indicator == 'Ichimoku':
+                fig.add_trace(go.Scatter(
+                    x=technical_data.index,
+                    y=technical_data[f'{selected_symbol}_tenkan_sen'],
+                    name='Tenkan-sen',
+                    line=dict(color='blue', dash='dash')
+                ))
+                fig.add_trace(go.Scatter(
+                    x=technical_data.index,
+                    y=technical_data[f'{selected_symbol}_kijun_sen'],
+                    name='Kijun-sen',
+                    line=dict(color='red', dash='dash')
+                ))
+                fig.add_trace(go.Scatter(
+                    x=technical_data.index,
+                    y=technical_data[f'{selected_symbol}_senkou_span_a'],
+                    name='Senkou Span A',
+                    fill=None,
+                    line=dict(color='rgba(76,175,80,0.5)')
+                ))
+                fig.add_trace(go.Scatter(
+                    x=technical_data.index,
+                    y=technical_data[f'{selected_symbol}_senkou_span_b'],
+                    name='Senkou Span B',
+                    fill='tonexty',
+                    line=dict(color='rgba(255,152,0,0.5)')
+                ))
+                fig.add_trace(go.Scatter(
+                    x=technical_data.index,
+                    y=technical_data[f'{selected_symbol}_chikou_span'],
+                    name='Chikou Span',
+                    line=dict(color='purple')
+                ))
+        
+        fig.update_layout(
+            title=f"Análisis Técnico - {selected_symbol}",
+            xaxis_title="Fecha",
+            yaxis_title="Precio",
+            height=600,
+            yaxis_type='log' if use_log else 'linear'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Gráficos separados para indicadores
+        for indicator in selected_indicators:
+            if indicator in ['RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI', 'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index', 'EOM']:
+                indicator_fig = go.Figure()
+                
+                if indicator == 'MACD':
+                    indicator_fig.add_trace(go.Scatter(
+                        x=technical_data.index,
+                        y=technical_data[f'{selected_symbol}_MACD_line'],
+                        name='MACD Line'
+                    ))
+                    indicator_fig.add_trace(go.Scatter(
+                        x=technical_data.index,
+                        y=technical_data[f'{selected_symbol}_MACD_signal'],
+                        name='Signal Line'
+                    ))
+                    indicator_fig.add_trace(go.Bar(
+                        x=technical_data.index,
+                        y=technical_data[f'{selected_symbol}_MACD'],
+                        name='MACD Histogram'
+                    ))
+                else:
+                    y_data = technical_data[f'{selected_symbol}_{indicator.replace(" ", "_")}']
+                    indicator_fig.add_trace(go.Scatter(
+                        x=technical_data.index,
+                        y=y_data,
+                        name=indicator
+                    ))
+                
+                indicator_fig.update_layout(
+                    title=f"{indicator} - {selected_symbol}",
+                    xaxis_title="Fecha",
+                    yaxis_title=indicator,
+                    height=300
+                )
+                
+                if indicator in ['RSI', 'Stoch RSI', 'MFI']:
+                    indicator_fig.add_hline(y=70, line_dash="dash", line_color="red")
+                    indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
+                
+                st.plotly_chart(indicator_fig, use_container_width=True)
 
-   with tabs[2]:
-       st.header("📰 Centro de Noticias")
-       news_categories = {
-           "financial": "Financieras",
-           "macro": "Macroeconómicas",
-           "political": "Políticas",
-           "corporate": "Empresariales",
-           "commodities": "Commodities"
-       }
-       
-       col1, col2 = st.columns([1, 3])
-       with col1:
-           selected_category = st.selectbox(
-               "Categoría",
-               options=list(news_categories.keys()),
-               format_func=lambda x: news_categories[x]
-           )
+    with tabs[2]:
+        st.header("📰 Centro de Noticias")
+        news_categories = {
+            "financial": "Financieras",
+            "macro": "Macroeconómicas",
+            "political": "Políticas",
+            "corporate": "Empresariales",
+            "commodities": "Commodities"
+        }
+        
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            selected_category = st.selectbox(
+                "Categoría",
+                options=list(news_categories.keys()),
+                format_func=lambda x: news_categories[x]
+            )
            
-           news_count = st.slider("Número de noticias", 5, 20, 10)
+            news_count = st.slider("Número de noticias", 5, 20, 10)
            
-       with col2:
-           news_articles = get_news_by_category(selected_category, news_count)
-           for article in news_articles:
-               with st.expander(article["title"]):
-                   st.write(f"**Fuente:** {article['source']['name']}")
-                   st.write(f"**Fecha:** {article['publishedAt'][:10]}")
-                   st.write(f"**Descripción:** {article['description']}")
-                   st.write(f"[Leer más]({article['url']})")
+        with col2:
+            news_articles = get_news_by_category(selected_category, news_count)
+            for article in news_articles:
+                with st.expander(article["title"]):
+                    st.write(f"**Fuente:** {article['source']['name']}")
+                    st.write(f"**Fecha:** {article['publishedAt'][:10]}")
+                    st.write(f"**Descripción:** {article['description']}")
+                    st.write(f"[Leer más]({article['url']})")
 
-   with tabs[3]:
-       st.header("📊 Análisis Fundamental")
-       
-       col1, col2 = st.columns([1, 2])
-       with col1:
-           fundamental_ticker = st.text_input("Símbolo", "AAPL", key='fundamental_ticker')
-           if st.button("Analizar"):
-               fundamental_data = get_fundamental_data(fundamental_ticker)
-               
-               if fundamental_data:
-                   with tabs[3]:
-       st.header("📊 Análisis Fundamental")
-       
-       col1, col2 = st.columns([1, 2])
-       with col1:
-           fundamental_ticker = st.text_input("Símbolo", "AAPL", key='fundamental_ticker')
-           if st.button("Analizar"):
-               fundamental_data = get_fundamental_data(fundamental_ticker)
-               
-               if fundamental_data:
-                   st.metric("Precio", f"${fundamental_data.get('price', 0):.2f}")
-                   st.metric("Market Cap", f"${fundamental_data.get('mktCap', 0):,.0f}")
-                   st.metric("Beta", f"{fundamental_data.get('beta', 0):.2f}")
+    with tabs[3]:
+        st.header("📊 Análisis Fundamental")
+        
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            fundamental_ticker = st.text_input("Símbolo", "AAPL", key='fundamental_ticker')
+            if st.button("Analizar"):
+                fundamental_data = get_fundamental_data(fundamental_ticker)
+                
+                if fundamental_data:
+                    st.metric("Precio", f"${fundamental_data.get('price', 0):.2f}")
+                    st.metric("Market Cap", f"${fundamental_data.get('mktCap', 0):,.0f}")
+                    st.metric("Beta", f"{fundamental_data.get('beta', 0):.2f}")
                    
-                   st.subheader("Información General")
-                   st.write(f"**Sector:** {fundamental_data.get('sector')}")
-                   st.write(f"**Industria:** {fundamental_data.get('industry')}")
-                   st.write(f"**CEO:** {fundamental_data.get('ceo')}")
+                    st.subheader("Información General")
+                    st.write(f"**Sector:** {fundamental_data.get('sector')}")
+                    st.write(f"**Industria:** {fundamental_data.get('industry')}")
+                    st.write(f"**CEO:** {fundamental_data.get('ceo')}")
                    
-                   with st.expander("Descripción"):
-                       st.write(fundamental_data.get('description'))
+                    with st.expander("Descripción"):
+                        st.write(fundamental_data.get('description'))
 
-   with tabs[4]:
-       st.header("📈 Indicadores Macroeconómicos")
-       
-       fred_indicators = {
-           "GDP": "PIB",
-           "UNRATE": "Desempleo",
-           "CPIAUCSL": "IPC",
-           "FEDFUNDS": "Tasa FED",
-           "DGS10": "Treasury 10Y",
-           "M2": "M2",
-           "INDPRO": "Producción Industrial",
-           "HOUST": "Construcción",
-           "PCE": "Consumo Personal",
-           "PAYEMS": "Nóminas no agrícolas"
-       }
-       
-       col1, col2 = st.columns([1, 3])
-       
-       with col1:
-           selected_indicator = st.selectbox(
-               "Indicador",
-               options=list(fred_indicators.keys()),
-               format_func=lambda x: fred_indicators[x]
-           )
+    with tabs[4]:
+        st.header("📈 Indicadores Macroeconómicos")
+        
+        fred_indicators = {
+            "GDP": "PIB",
+            "UNRATE": "Desempleo",
+            "CPIAUCSL": "IPC",
+            "FEDFUNDS": "Tasa FED",
+            "DGS10": "Treasury 10Y",
+            "M2": "M2",
+            "INDPRO": "Producción Industrial",
+            "HOUST": "Construcción",
+            "PCE": "Consumo Personal",
+            "PAYEMS": "Nóminas no agrícolas"
+        }
+        
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            selected_indicator = st.selectbox(
+                "Indicador",
+                options=list(fred_indicators.keys()),
+                format_func=lambda x: fred_indicators[x]
+            )
            
-           date_range = st.selectbox(
-               "Período",
-               options=["1Y", "2Y", "5Y", "10Y", "MAX"],
-               index=0
-           )
+            date_range = st.selectbox(
+                "Período",
+                options=["1Y", "2Y", "5Y", "10Y", "MAX"],
+                index=0
+            )
            
-           end_date = datetime.now()
-           start_date = end_date - pd.DateOffset(
-               years={"1Y": 1, "2Y": 2, "5Y": 5, "10Y": 10, "MAX": 50}[date_range]
-           )
-       
-       with col2:
-           fred_data = get_fred_data(selected_indicator, start_date, end_date)
-           if fred_data is not None and not fred_data.empty:
-               fig = go.Figure()
-               fig.add_trace(go.Scatter(
-                   x=fred_data.index,
-                   y=fred_data['value'],
-                   mode='lines',
-                   name=fred_indicators[selected_indicator]
-               ))
+            end_date = datetime.now()
+            start_date = end_date - pd.DateOffset(
+                years={"1Y": 1, "2Y": 2, "5Y": 5, "10Y": 10, "MAX": 50}[date_range]
+            )
+        
+        with col2:
+            fred_data = get_fred_data(selected_indicator, start_date, end_date)
+            if fred_data is not None and not fred_data.empty:
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=fred_data.index,
+                    y=fred_data['value'],
+                    mode='lines',
+                    name=fred_indicators[selected_indicator]
+                ))
                
-               fig.update_layout(
-                   title=f"{fred_indicators[selected_indicator]} ({selected_indicator})",
-                   xaxis_title="Fecha",
-                   yaxis_title="Valor",
-                   height=500
-               )
+                fig.update_layout(
+                    title=f"{fred_indicators[selected_indicator]} ({selected_indicator})",
+                    xaxis_title="Fecha",
+                    yaxis_title="Valor",
+                    height=500
+                )
                
-               st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
                
-               # Métricas
-               col1, col2, col3, col4 = st.columns(4)
-               with col1:
-                   st.metric("Último", f"{fred_data['value'].iloc[-1]:.2f}")
-               with col2:
-                   st.metric("Promedio", f"{fred_data['value'].mean():.2f}")
-               with col3:
-                   st.metric("Máximo", f"{fred_data['value'].max():.2f}")
-               with col4:
-                   st.metric("Mínimo", f"{fred_data['value'].min():.2f}")
+                # Métricas
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Último", f"{fred_data['value'].iloc[-1]:.2f}")
+                with col2:
+                    st.metric("Promedio", f"{fred_data['value'].mean():.2f}")
+                with col3:
+                    st.metric("Máximo", f"{fred_data['value'].max():.2f}")
+                with col4:
+                    st.metric("Mínimo", f"{fred_data['value'].min():.2f}")
 
 # Información adicional
 st.sidebar.markdown("---")
