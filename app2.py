@@ -355,56 +355,103 @@ def display_trading_interface():
     st.set_page_config(page_title="Trading Platform Pro V5+", layout="wide")
     st.title("📈 Trading Platform Pro V5+")
     
-    st.sidebar.warning("⚠️ PLATAFORMA EN DESARROLLO\nEsta es una versión demo - No usar para trading real.")
-    
-    # Inicializar estado de la sesión
-    if 'current_tab' not in st.session_state:
-        st.session_state.current_tab = 0
-    
     # Configuración global en sidebar
     with st.sidebar:
+        st.warning("⚠️ PLATAFORMA EN DESARROLLO\nEsta es una versión demo - No usar para trading real.")
         symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
         symbols = [s.strip() for s in symbols_input.split(",")]
-        period = st.selectbox("Período", ["1mo", "3mo", "6mo", "1y", "2y", "5y"])
-        interval = st.selectbox("Intervalo", ["1d", "5d", "1wk", "1mo"])
+        state_period = st.selectbox("Período", ["1mo", "3mo", "6mo", "1y", "2y", "5y"])
+        state_interval = st.selectbox("Intervalo", ["1d", "5d", "1wk", "1mo"])
     
-    # Obtener datos una sola vez
-    portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
+    # Obtener datos
+    portfolio_data, info_dict = get_portfolio_data(symbols, state_period, state_interval)
     
     if portfolio_data is not None and not portfolio_data.empty:
-        # Calcular métricas una sola vez
+        # Calcular métricas
         close_cols = [col for col in portfolio_data.columns if col.endswith('_Close')]
         returns = portfolio_data[close_cols].pct_change().dropna()
         returns.columns = [col.replace('_Close', '') for col in returns.columns]
         weights = hierarchical_risk_parity(returns)
         
         # Crear tabs
-        tab_names = ["Trading", "Análisis Técnico", "Noticias", "Fundamental", "Macro"]
-        tabs = st.tabs(tab_names)
+        tabs = st.tabs(["Trading", "Análisis Técnico", "Noticias", "Fundamental", "Macro"])
         
         with tabs[0]:
-            display_trading_tab(portfolio_data, info_dict, symbols, period, interval, weights)
-            
-        with tabs[1]:
-            display_technical_tab(portfolio_data, symbols, period, interval)
-            
-        with tabs[2]:
-            display_news_tab()
-            
-        with tabs[3]:
-            display_fundamental_tab()
-            
-        with tabs[4]:
-            display_macro_tab()
-    else:
-        st.error("No se pudieron obtener datos para los símbolos especificados")
+            display_trading_tab(portfolio_data, info_dict, symbols, state_period, 
+                             state_interval, weights)
+
+def create_trading_chart(portfolio_data, symbol, chart_type, use_log, 
+                        confidence_level, risk_multiplier):
+    try:
+        fig = go.Figure()
+        
+        if chart_type == 'Candlestick':
+            fig.add_trace(go.Candlestick(
+                x=portfolio_data.index,
+                open=portfolio_data[f'{symbol}_Open'],
+                high=portfolio_data[f'{symbol}_High'],
+                low=portfolio_data[f'{symbol}_Low'],
+                close=portfolio_data[f'{symbol}_Close'],
+                name=symbol
+            ))
+        elif chart_type == 'OHLC':
+            fig.add_trace(go.Ohlc(
+                x=portfolio_data.index,
+                open=portfolio_data[f'{symbol}_Open'],
+                high=portfolio_data[f'{symbol}_High'],
+                low=portfolio_data[f'{symbol}_Low'],
+                close=portfolio_data[f'{symbol}_Close'],
+                name=symbol
+            ))
+        else:
+            fig.add_trace(go.Scatter(
+                x=portfolio_data.index,
+                y=portfolio_data[f'{symbol}_Close'],
+                name=symbol
+            ))
+
+        # Calcular niveles
+        stop_loss, take_profit, volatility = calculate_dynamic_levels(
+            portfolio_data, symbol, confidence_level, risk_multiplier)
+
+        # Añadir líneas de stop loss y take profit
+        fig.add_trace(go.Scatter(
+            x=portfolio_data.index,
+            y=[stop_loss] * len(portfolio_data.index),
+            mode='lines',
+            name='Stop Loss',
+            line=dict(color='red', dash='dash'),
+            showlegend=True
+        ))
+
+        fig.add_trace(go.Scatter(
+            x=portfolio_data.index,
+            y=[take_profit] * len(portfolio_data.index),
+            mode='lines',
+            name='Take Profit',
+            line=dict(color='green', dash='dash'),
+            showlegend=True
+        ))
+
+        fig.update_layout(
+            title=f"Trading View - {symbol}",
+            xaxis_title="Fecha",
+            yaxis_title="Precio",
+            height=600,
+            yaxis_type='log' if use_log else 'linear'
+        )
+        
+        return fig
+    except Exception as e:
+        st.error(f"Error creando gráfico: {e}")
+        return None
 
 def display_trading_tab(portfolio_data, info_dict, symbols, period, interval, weights):
     st.header("Panel de Trading")
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        chart_type = st.selectbox("Tipo de Gráfico", ['Candlestick', 'OHLC', 'Line'])
+        chart_type = st.selectbox("Tipo de Gráfico", ['Line', 'Candlestick', 'OHLC'])
         use_log = st.checkbox("Escala Logarítmica")
     with col2:
         confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
@@ -412,17 +459,18 @@ def display_trading_tab(portfolio_data, info_dict, symbols, period, interval, we
     with col3:
         risk_multiplier = st.slider("Multiplicador de Riesgo", 2.0, 5.0, 3.0, 0.1)
     
-    # Panel de métricas
-    metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
-    display_metrics_panel(metrics)
+    try:
+        metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate, period, interval)
+        display_metrics_panel(metrics)
+    except Exception as e:
+        st.error(f"Error en cálculo de métricas: {e}")
     
-    # Panel de trading
     selected_symbol = st.selectbox("Seleccionar Activo", symbols, key='trading_symbol')
-    display_trading_chart(portfolio_data, selected_symbol, chart_type, use_log, 
-                         confidence_level, risk_multiplier)
     
-    # Panel de información y operaciones
-    display_trading_info(portfolio_data, info_dict, selected_symbol)
+    if chart := create_trading_chart(portfolio_data, selected_symbol, chart_type, 
+                                   use_log, confidence_level, risk_multiplier):
+        st.plotly_chart(chart, use_container_width=True)
+        display_trading_info(portfolio_data, info_dict, selected_symbol)
 
 def display_metrics_panel(metrics):
     with st.expander("📊 Panel de Métricas", expanded=True):
