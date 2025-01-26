@@ -8,6 +8,7 @@ from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 from arch import arch_model
 from scipy.stats import norm
+import statsmodels.api as sm
 import ta
 
 def get_portfolio_data(tickers, period, interval):
@@ -39,14 +40,39 @@ def get_benchmark_data(period, interval):
         st.error(f"Error getting benchmark data: {e}")
         return None
 
+def calculate_har_volatility(returns, lags=[1, 5, 22]):
+    """Calculate HAR volatility forecast"""
+    # Calculate realized variance (squared returns)
+    rv = returns ** 2
+    
+    # Calculate average RV for different horizons
+    rv_daily = rv.rolling(window=lags[0]).mean()
+    rv_weekly = rv.rolling(window=lags[1]).mean()
+    rv_monthly = rv.rolling(window=lags[2]).mean()
+    
+    # Create lagged features
+    X = pd.DataFrame({
+        'daily': rv_daily.shift(1),
+        'weekly': rv_weekly.shift(1),
+        'monthly': rv_monthly.shift(1)
+    }).fillna(method='bfill')
+    
+    y = rv
+    
+    # Simple OLS estimation
+    X = sm.add_constant(X)
+    model = sm.OLS(y, X).fit()
+    
+    # Forecast
+    forecast = model.predict(X.iloc[-1:]).iloc[0]
+    return np.sqrt(forecast)
+
 def calculate_dynamic_levels(data, symbol, confidence_level=0.95):
+    """Calculate dynamic stop loss and take profit using HAR volatility"""
     returns = pd.Series(np.log(data[f'{symbol}_Close']).diff().dropna())
     
-    model = arch_model(returns, vol='HAR', p=1, lags=[1, 5, 22])
-    results = model.fit(disp='off')
-    
-    forecast = results.forecast(horizon=1)
-    conditional_vol = np.sqrt(forecast.variance.values[-1, 0])
+    # Calculate HAR volatility forecast
+    conditional_vol = calculate_har_volatility(returns)
     
     z_score = norm.ppf(confidence_level)
     current_price = data[f'{symbol}_Close'].iloc[-1]
