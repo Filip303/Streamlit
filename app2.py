@@ -527,9 +527,19 @@ if portfolio_data is not None and not portfolio_data.empty:
         )
         st.plotly_chart(fig, use_container_width=True)
     
-    with tab2:
-        selected_symbol = st.selectbox("Seleccionar Activo", symbols, key="technical_select")
-        technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
+   with tab2:
+    available_indicators = [
+        'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
+        'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
+        'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
+        'ADX', 'CCI', 'DPO', 'TRIX',
+        'OBV', 'Force Index', 'EOM', 'Volume SMA'
+    ]
+    selected_symbol = st.selectbox("Seleccionar Activo", symbols, key="technical_select")
+    selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators, key="indicators_select")
+    
+   if len(selected_indicators) > 0:  # Solo plotear indicadores si hay seleccionados
+            plot_indicators(fig, technical_data, selected_symbol, selected_indicators)
         
         fig = go.Figure()
         
