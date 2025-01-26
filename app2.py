@@ -67,6 +67,21 @@ FRED_INDICATORS = {
     'Initial Jobless Claims': 'ICSA'
 }
 
+def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplier=3):
+   if f'{symbol}_Close' not in data.columns:
+       return 0, 0, 0
+       
+   returns = pd.Series(np.log(data[f'{symbol}_Close']).diff().dropna())
+   conditional_vol = calculate_har_volatility(returns)
+   z_score = norm.ppf(confidence_level)
+   current_price = data[f'{symbol}_Close'].iloc[-1]
+   
+   stop_loss = current_price * np.exp(-z_score * conditional_vol)
+   risk = current_price - stop_loss
+   take_profit = current_price + (risk * risk_multiplier)
+   
+   return stop_loss, take_profit, conditional_vol
+
 # Función para obtener datos de la cartera
 def get_portfolio_data(tickers, period, interval):
     portfolio_data = pd.DataFrame()
