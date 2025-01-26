@@ -379,6 +379,77 @@ def display_trading_interface():
         with tabs[0]:
             display_trading_tab(portfolio_data, info_dict, symbols, state_period, 
                              state_interval, weights)
+        
+        with tabs[1]:
+            display_technical_analysis_tab(portfolio_data, symbols)
+        
+        with tabs[2]:
+            display_news_tab()
+        
+        with tabs[3]:
+            display_fundamental_tab(portfolio_data, symbols)
+        
+        with tabs[4]:
+            display_macro_tab()
+
+def display_technical_analysis_tab(portfolio_data, symbols):
+    st.header("Análisis Técnico")
+    selected_symbol = st.selectbox("Seleccionar Activo", symbols, key='technical_symbol')
+    
+    if selected_symbol:
+        df = calculate_technical_indicators(portfolio_data, selected_symbol)
+        if not df.empty:
+            st.write(f"Indicadores Técnicos para {selected_symbol}")
+            st.dataframe(df.tail())
+            
+            # Gráfico de RSI
+            fig_rsi = go.Figure()
+            fig_rsi.add_trace(go.Scatter(x=df.index, y=df[f'{selected_symbol}_RSI'], name='RSI'))
+            fig_rsi.update_layout(title=f"RSI para {selected_symbol}", xaxis_title="Fecha", yaxis_title="RSI")
+            st.plotly_chart(fig_rsi, use_container_width=True)
+
+def display_news_tab():
+    st.header("Noticias")
+    category = st.selectbox("Seleccionar Categoría", ["financial", "macro", "political", "corporate", "commodities"])
+    news = get_news_by_category(category)
+    
+    if news:
+        for article in news:
+            st.write(f"**{article['title']}**")
+            st.write(f"*{article['publishedAt']}*")
+            st.write(article['description'])
+            st.write(f"[Leer más]({article['url']})")
+            st.write("---")
+    else:
+        st.warning("No se encontraron noticias.")
+
+def display_fundamental_tab(portfolio_data, symbols):
+    st.header("Análisis Fundamental")
+    selected_symbol = st.selectbox("Seleccionar Activo", symbols, key='fundamental_symbol')
+    
+    if selected_symbol:
+        trends = get_financial_trends(selected_symbol)
+        if trends:
+            st.write(f"Tendencias Financieras para {selected_symbol}")
+            st.write(f"Fechas: {trends['dates']}")
+            st.write(f"Ingresos: {trends['revenues']}")
+            st.write(f"Beneficio Neto: {trends['net_income']}")
+        else:
+            st.warning("No se encontraron datos fundamentales.")
+
+def display_macro_tab():
+    st.header("Datos Macro")
+    indicator = st.selectbox("Seleccionar Indicador", ["GDP", "Inflation", "Unemployment", "Interest Rates"])
+    start_date = st.date_input("Fecha de Inicio", datetime.now() - timedelta(days=365))
+    end_date = st.date_input("Fecha de Fin", datetime.now())
+    
+    macro_data = get_macro_data(indicator, "USA", start_date, end_date)
+    if macro_data:
+        st.write(f"Datos de {indicator} para USA")
+        st.write(f"Fechas: {macro_data['dates']}")
+        st.write(f"Valores: {macro_data['values']}")
+    else:
+        st.warning("No se encontraron datos macro.")
 
 def create_trading_chart(portfolio_data, symbol, chart_type, use_log, 
                         confidence_level, risk_multiplier):
