@@ -202,34 +202,61 @@ def calculate_technical_indicators(df, symbol):
     
     return df.fillna(method='ffill').fillna(method='bfill')
 
-def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplier=3):
-    returns = pd.Series(np.log(data[f'{symbol}_Close']).diff().dropna())
-    conditional_vol = calculate_har_volatility(returns)
-    z_score = norm.ppf(confidence_level)
-    current_price = data[f'{symbol}_Close'].iloc[-1]
-    
-    stop_loss = current_price * np.exp(-z_score * conditional_vol)
-    risk = current_price - stop_loss
-    take_profit = current_price + (risk * risk_multiplier)
-    
-    return stop_loss, take_profit, conditional_vol
-
-def calculate_var_cvar(returns, confidence_level=0.95):
-    try:
-        if isinstance(returns, pd.Series):
-            returns = returns.dropna()
-        
-        if len(returns) < 2:
-            return 0, 0
-            
-        returns_array = np.array(returns)
-        var = np.percentile(returns_array, (1 - confidence_level) * 100)
-        cvar = returns_array[returns_array <= var].mean()
-        
-        return var, cvar if not np.isnan(cvar) else var
-    except Exception as e:
-        st.error(f"Error en cálculo VaR/CVaR: {e}")
-        return 0, 0
+def calculate_technical_indicators(df, symbol):
+   if df is None or df.empty:
+       return pd.DataFrame()
+       
+   df = df.copy()
+   try:
+       close = df[f'{symbol}_Close']
+       high = df[f'{symbol}_High']
+       low = df[f'{symbol}_Low']
+       volume = df[f'{symbol}_Volume']
+       
+       # Indicadores básicos
+       df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
+           high=high, low=low, close=close, volume=volume)
+       df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close, window=20)
+       df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(close, window=50)
+       df[f'{symbol}_SMA20'] = close.rolling(window=20).mean()
+       df[f'{symbol}_SMA50'] = close.rolling(window=50).mean()
+       
+       # Momentum
+       df[f'{symbol}_RSI'] = ta.momentum.rsi(close, window=14)
+       df[f'{symbol}_MACD'] = ta.trend.macd_diff(close)
+       df[f'{symbol}_MACD_signal'] = ta.trend.macd_signal(close)
+       df[f'{symbol}_MACD_line'] = ta.trend.macd(close)
+       df[f'{symbol}_Stoch_RSI'] = ta.momentum.stochrsi(close)
+       df[f'{symbol}_MFI'] = ta.volume.money_flow_index(high, low, close, volume)
+       df[f'{symbol}_TSI'] = ta.momentum.tsi(close)
+       
+       # Trend
+       df[f'{symbol}_ADX'] = ta.trend.adx(high, low, close, window=14)
+       df[f'{symbol}_CCI'] = ta.trend.cci(high, low, close)
+       df[f'{symbol}_DPO'] = ta.trend.dpo(close)
+       df[f'{symbol}_TRIX'] = ta.trend.trix(close)
+       
+       # Volatilidad
+       df[f'{symbol}_BB_upper'] = ta.volatility.bollinger_hband(close)
+       df[f'{symbol}_BB_middle'] = ta.volatility.bollinger_mavg(close)
+       df[f'{symbol}_BB_lower'] = ta.volatility.bollinger_lband(close)
+       df[f'{symbol}_ATR'] = ta.volatility.average_true_range(high, low, close)
+       df[f'{symbol}_KC_upper'] = ta.volatility.keltner_channel_hband(high, low, close)
+       df[f'{symbol}_KC_lower'] = ta.volatility.keltner_channel_lband(high, low, close)
+       
+       # Volumen
+       df[f'{symbol}_OBV'] = ta.volume.on_balance_volume(close, volume)
+       df[f'{symbol}_Force_Index'] = ta.volume.force_index(close, volume)
+       df[f'{symbol}_EOM'] = ta.volume.ease_of_movement(high, low, volume)
+       df[f'{symbol}_Volume_SMA'] = volume.rolling(window=20).mean()
+       
+       # Ichimoku
+       df = calculate_ichimoku(df, symbol)
+       
+   except Exception as e:
+       st.error(f"Error calculando indicadores para {symbol}: {e}")
+   
+   return df.fillna(method='ffill').fillna(method='bfill')
 
 def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
     try:
