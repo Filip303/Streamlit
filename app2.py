@@ -13,11 +13,9 @@ import requests
 import time
 from fredapi import Fred
 
-# Configuración de claves API
 ALPHA_VANTAGE_KEY = "9M00TPMNCN2ZW1G5"
 FRED_API_KEY = "8617ec24219966a9191eb6a9d9d9fd24"
 
-# Función para obtener datos fundamentales
 def get_fundamental_data(ticker):
     url = "https://www.alphavantage.co/query"
     endpoints = {
@@ -40,7 +38,6 @@ def get_fundamental_data(ticker):
     
     return data
 
-# Función para obtener datos de FRED
 def get_fred_data(series_id, start_date=None, end_date=None):
     fred = Fred(api_key=FRED_API_KEY)
     try:
@@ -50,7 +47,6 @@ def get_fred_data(series_id, start_date=None, end_date=None):
         st.error(f"Error en datos FRED: {e}")
         return None
 
-# Diccionario de indicadores FRED
 FRED_INDICATORS = {
     'GDP': 'GDP',
     'Real GDP': 'GDPC1',
@@ -82,7 +78,6 @@ def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplie
    
    return stop_loss, take_profit, conditional_vol
 
-# Función para obtener datos de la cartera
 def get_portfolio_data(tickers, period, interval):
    portfolio_data = pd.DataFrame()
    info_dict = {}
@@ -106,7 +101,6 @@ def get_portfolio_data(tickers, period, interval):
        
    return portfolio_data, info_dict
 
-# Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
     try:
         benchmarks = ['SPY', 'URTH']
@@ -121,7 +115,6 @@ def get_benchmark_data(period, interval):
         st.error(f"Error al obtener datos de benchmark: {e}")
         return None
 
-# Función para calcular la volatilidad HAR
 def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
     rv = returns ** 2
     rv_daily = rv.rolling(window=lags[0]).mean()
@@ -141,7 +134,6 @@ def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
     forecast = model.predict(X.iloc[-1:]).iloc[0]
     return np.sqrt(forecast) * scale_factor
 
-# Función para calcular el Ichimoku Cloud
 def calculate_ichimoku(df, symbol):
     high = df[f'{symbol}_High']
     low = df[f'{symbol}_Low']
@@ -166,7 +158,6 @@ def calculate_ichimoku(df, symbol):
     
     return df
 
-# Función para calcular el riesgo usando HRP
 def hierarchical_risk_parity(returns):
     try:
         returns = returns.dropna(axis=1, how='all')
@@ -188,9 +179,8 @@ def hierarchical_risk_parity(returns):
         st.error(f"Error en cálculo HRP: {e}")
         return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
 
-# Función para calcular indicadores técnicos
 def calculate_technical_indicators(df, symbol):
-    if df is None or df.empty or len(df) < 26:  # Aseguramos mínimo de datos
+    if df is None or df.empty or len(df) < 26:
         return pd.DataFrame()
         
     df = df.copy()
@@ -200,7 +190,6 @@ def calculate_technical_indicators(df, symbol):
         low = df[f'{symbol}_Low']
         volume = df[f'{symbol}_Volume']
         
-        # Indicadores con ventanas más pequeñas primero
         window_14 = min(14, len(df) - 1)
         window_20 = min(20, len(df) - 1)
         window_50 = min(50, len(df) - 1)
@@ -243,7 +232,6 @@ def calculate_technical_indicators(df, symbol):
     
     return df.fillna(method='ffill').fillna(method='bfill')
 
-# Función para calcular VaR y CVaR
 def calculate_var_cvar(returns, confidence_level=0.95):
    try:
        if isinstance(returns, pd.Series):
@@ -261,7 +249,6 @@ def calculate_var_cvar(returns, confidence_level=0.95):
        st.error(f"Error en cálculo VaR/CVaR: {e}")
        return 0, 0
 
-# Función para calcular métricas de la cartera
 def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
     try:
         metrics = {}
@@ -330,7 +317,6 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
         st.error(f"Error en cálculo de métricas: {e}")
         return None
 
-# Función para graficar indicadores técnicos
 def plot_indicators(fig, technical_data, selected_symbol, selected_indicators):
     for indicator in selected_indicators:
         if indicator == 'Ichimoku':
@@ -391,7 +377,6 @@ def plot_indicators(fig, technical_data, selected_symbol, selected_indicators):
                 ))
     return fig
 
-# Función para crear subgráficos de indicadores
 def create_indicator_subplot(technical_data, selected_symbol, indicator):
     fig = go.Figure()
     
@@ -430,12 +415,10 @@ def create_indicator_subplot(technical_data, selected_symbol, indicator):
     
     return fig
 
-# Configuración de la interfaz de Streamlit
 st.set_page_config(page_title="Trading Platform Pro V5", layout="wide")
 st.title("📈 Trading Platform Pro V5")
 st.warning("⚠️ Sitio en construcción - Solo para uso educativo!")
 
-# Configuración inicial
 col1, col2, col3 = st.columns(3)
 with col1:
     symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
@@ -448,18 +431,15 @@ with col3:
     confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
     risk_free_rate = st.number_input("Tasa Libre de Riesgo Anual (%)", 0.0, 100.0, 2.0) / 100.0
 
-# Obtener datos de la cartera
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
-    # Calcular métricas de la cartera
     close_cols = [col for col in portfolio_data.columns if col.endswith('_Close')]
     returns = portfolio_data[close_cols].pct_change().dropna()
     returns.columns = [col.replace('_Close', '') for col in returns.columns]
     weights = hierarchical_risk_parity(returns)
     metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
 
-    # Panel de métricas
     with st.expander("📊 Panel de Métricas", expanded=True):
         if metrics:
             metrics_df = pd.DataFrame(columns=['Métrica', 'Portfolio', 'SPY', 'URTH'])
@@ -477,7 +457,6 @@ if portfolio_data is not None and not portfolio_data.empty:
             
             st.dataframe(metrics_df, use_container_width=True, hide_index=True)
     
-    # Pestañas de análisis
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Análisis de Cartera", "Indicadores Técnicos", "Análisis Fundamental", "Análisis Macro", "Panel de Trading"])
     
     with tab1:
@@ -666,85 +645,82 @@ if portfolio_data is not None and not portfolio_data.empty:
                             st.metric("Máximo", f"{fred_data['value'].max():.2f}")
 
     with tab5:
-   st.subheader("💹 Panel de Trading")
-   trading_symbol_input = st.text_input("Símbolo para Trading", "AAPL", key='trading_symbol_input')
-   selected_symbol = trading_symbol_input.strip()
-   
-   try:
-       stock = yf.Ticker(selected_symbol)
-       info = stock.info
-       if not info:
-           st.error(f"Símbolo {selected_symbol} no encontrado")
-           st.stop()
-   except Exception as e:
-       st.error(f"Error al verificar símbolo: {e}")
-       st.stop()
+        st.subheader("💹 Panel de Trading")
+        trading_symbol_input = st.text_input("Símbolo para Trading", "AAPL", key='trading_symbol_input')
+        selected_symbol = trading_symbol_input.strip()
+        
+        try:
+            stock = yf.Ticker(selected_symbol)
+            info = stock.info
+            if not info:
+                st.error(f"Símbolo {selected_symbol} no encontrado")
+                st.stop()
+        except Exception as e:
+            st.error(f"Error al verificar símbolo: {e}")
+            st.stop()
 
-   risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", 
-                             min_value=2.0, max_value=5.0, value=3.0, step=0.1)
-   
-   # Obtener datos del trading
-   trading_data = stock.history(period=period, interval=interval)
-   if trading_data.empty:
-       st.error("No se pudieron obtener datos para el símbolo seleccionado")
-       st.stop()
-   
-   current_price = trading_data['Close'].iloc[-1]
-   stop_loss, take_profit, volatility = calculate_dynamic_levels(
-       trading_data.rename(columns={col: f"{selected_symbol}_{col}" for col in trading_data.columns}),
-       selected_symbol, confidence_level, risk_multiplier)
+        risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", 
+                                 min_value=2.0, max_value=5.0, value=3.0, step=0.1)
+        
+        trading_data = stock.history(period=period, interval=interval)
+        if trading_data.empty:
+            st.error("No se pudieron obtener datos para el símbolo seleccionado")
+            st.stop()
+        
+        current_price = trading_data['Close'].iloc[-1]
+        stop_loss, take_profit, volatility = calculate_dynamic_levels(
+            trading_data.rename(columns={col: f"{selected_symbol}_{col}" for col in trading_data.columns}),
+            selected_symbol, confidence_level, risk_multiplier)
 
-   col1, col2 = st.columns([7, 3])
-   
-   with col1:
-       fig = go.Figure()
-       
-       if chart_type == 'Candlestick':
-           fig.add_trace(go.Candlestick(
-               x=trading_data.index,
-               open=trading_data['Open'],
-               high=trading_data['High'],
-               low=trading_data['Low'],
-               close=trading_data['Close'],
-               name=selected_symbol
-           ))
-       else:
-           fig.add_trace(go.Scatter(
-               x=trading_data.index,
-               y=trading_data['Close'],
-               name=selected_symbol
-           ))
+        col1, col2 = st.columns([7, 3])
+        
+        with col1:
+            fig = go.Figure()
+            
+            if chart_type == 'Candlestick':
+                fig.add_trace(go.Candlestick(
+                    x=trading_data.index,
+                    open=trading_data['Open'],
+                    high=trading_data['High'],
+                    low=trading_data['Low'],
+                    close=trading_data['Close'],
+                    name=selected_symbol
+                ))
+            else:
+                fig.add_trace(go.Scatter(
+                    x=trading_data.index,
+                    y=trading_data['Close'],
+                    name=selected_symbol
+                ))
 
-       # Añadir líneas de stop loss y take profit
-       fig.add_trace(go.Scatter(
-           x=trading_data.index,
-           y=[stop_loss] * len(trading_data.index),
-           mode='lines',
-           name='Stop Loss',
-           line=dict(color='red', dash='dash'),
-           showlegend=True
-       ))
+            fig.add_trace(go.Scatter(
+                x=trading_data.index,
+                y=[stop_loss] * len(trading_data.index),
+                mode='lines',
+                name='Stop Loss',
+                line=dict(color='red', dash='dash'),
+                showlegend=True
+            ))
 
-       fig.add_trace(go.Scatter(
-           x=trading_data.index,
-           y=[take_profit] * len(trading_data.index),
-           mode='lines',
-           name='Take Profit',
-           line=dict(color='green', dash='dash'),
-           showlegend=True
-       ))
-       
-       fig.update_layout(
-           title=f"Trading View - {selected_symbol}",
-           xaxis_title="Fecha",
-           yaxis_title="Precio",
-           height=600,
-           yaxis_type='log'
-       )
-       
-       st.plotly_chart(fig, use_container_width=True)
+            fig.add_trace(go.Scatter(
+                x=trading_data.index,
+                y=[take_profit] * len(trading_data.index),
+                mode='lines',
+                name='Take Profit',
+                line=dict(color='green', dash='dash'),
+                showlegend=True
+            ))
+            
+            fig.update_layout(
+                title=f"Trading View - {selected_symbol}",
+                xaxis_title="Fecha",
+                yaxis_title="Precio",
+                height=600,
+                yaxis_type='log'
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
 
-# Barra lateral
 st.sidebar.markdown("---")
 st.sidebar.info("""
 Características:
