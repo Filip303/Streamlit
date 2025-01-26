@@ -47,12 +47,28 @@ def get_news_by_category(category, page_size=10):
 
 # FMP API Functions
 def get_fundamental_data(ticker):
+    base_url = "https://financialmodelingprep.com/api/v3"
+    endpoints = {
+        "profile": f"/profile/{ticker}",
+        "metrics": f"/key-metrics-ttm/{ticker}",
+        "ratios": f"/ratios-ttm/{ticker}",
+        "financials": f"/income-statement/{ticker}?limit=1",
+        "balance": f"/balance-sheet-statement/{ticker}?limit=1"
+    }
+    
+    data = {}
     try:
-        response = requests.get(
-            f"https://financialmodelingprep.com/api/v3/profile/{ticker}",
-            params={"apikey": FMP_API_KEY}
-        )
-        return response.json()[0] if response.status_code == 200 and response.json() else None
+        for key, endpoint in endpoints.items():
+            response = requests.get(
+                f"{base_url}{endpoint}",
+                params={"apikey": FMP_API_KEY}
+            )
+            if response.status_code == 200:
+                result = response.json()
+                if result:
+                    data[key] = result[0] if isinstance(result, list) else result
+                    
+        return data
     except Exception as e:
         st.error(f"Error en datos fundamentales: {e}")
         return None
@@ -619,27 +635,61 @@ if portfolio_data is not None and not portfolio_data.empty:
                     st.write(f"[Leer más]({article['url']})")
 
     with tabs[3]:
-        st.header("📊 Análisis Fundamental")
-        
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            fundamental_ticker = st.text_input("Símbolo", "AAPL", key='fundamental_ticker')
-            if st.button("Analizar"):
-                fundamental_data = get_fundamental_data(fundamental_ticker)
+    st.header("📊 Análisis Fundamental")
+    
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        fundamental_ticker = st.text_input("Símbolo", "AAPL", key='fundamental_ticker')
+        if st.button("Analizar"):
+            fundamental_data = get_fundamental_data(fundamental_ticker)
+            
+            if fundamental_data:
+                profile = fundamental_data.get('profile', {})
+                metrics = fundamental_data.get('metrics', {})
+                ratios = fundamental_data.get('ratios', {})
+                financials = fundamental_data.get('financials', {})
+                balance = fundamental_data.get('balance', {})
                 
-                if fundamental_data:
-                    st.metric("Precio", f"${fundamental_data.get('price', 0):.2f}")
-                    st.metric("Market Cap", f"${fundamental_data.get('mktCap', 0):,.0f}")
-                    st.metric("Beta", f"{fundamental_data.get('beta', 0):.2f}")
-                   
-                    st.subheader("Información General")
-                    st.write(f"**Sector:** {fundamental_data.get('sector')}")
-                    st.write(f"**Industria:** {fundamental_data.get('industry')}")
-                    st.write(f"**CEO:** {fundamental_data.get('ceo')}")
-                   
-                    with st.expander("Descripción"):
-                        st.write(fundamental_data.get('description'))
-
+                # Métricas principales
+                st.metric("Precio", f"${profile.get('price', 0):.2f}")
+                st.metric("Market Cap", f"${profile.get('mktCap', 0):,.0f}")
+                st.metric("Beta", f"{profile.get('beta', 0):.2f}")
+                
+                # Información general
+                st.subheader("Información General")
+                st.write(f"**Sector:** {profile.get('sector', 'N/A')}")
+                st.write(f"**Industria:** {profile.get('industry', 'N/A')}")
+                st.write(f"**CEO:** {profile.get('ceo', 'N/A')}")
+                
+                # Ratios financieros
+                st.subheader("Ratios Financieros")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("P/E", f"{ratios.get('peRatioTTM', 0):.2f}")
+                    st.metric("ROE", f"{ratios.get('returnOnEquityTTM', 0):.2%}")
+                with col2:
+                    st.metric("P/B", f"{ratios.get('priceToBookRatioTTM', 0):.2f}")
+                    st.metric("ROA", f"{ratios.get('returnOnAssetsTTM', 0):.2%}")
+                with col3:
+                    st.metric("D/E", f"{ratios.get('debtEquityRatioTTM', 0):.2f}")
+                    st.metric("Margen Neto", f"{ratios.get('netProfitMarginTTM', 0):.2%}")
+                
+                # Estados financieros
+                st.subheader("Estados Financieros (TTM)")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write("**Estado de Resultados**")
+                    st.write(f"- Ingresos: ${financials.get('revenue', 0):,.0f}")
+                    st.write(f"- EBITDA: ${financials.get('ebitda', 0):,.0f}")
+                    st.write(f"- Beneficio Neto: ${financials.get('netIncome', 0):,.0f}")
+                with col2:
+                    st.write("**Balance**")
+                    st.write(f"- Activos Totales: ${balance.get('totalAssets', 0):,.0f}")
+                    st.write(f"- Deuda Total: ${balance.get('totalDebt', 0):,.0f}")
+                    st.write(f"- Patrimonio: ${balance.get('totalEquity', 0):,.0f}")
+                
+                with st.expander("Descripción"):
+                    st.write(profile.get('description', 'No hay descripción disponible'))
     with tabs[4]:
         st.header("📈 Indicadores Macroeconómicos")
         
