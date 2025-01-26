@@ -157,48 +157,56 @@ def hierarchical_risk_parity(returns):
         return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
 
 def calculate_technical_indicators(df, symbol):
-    if df is None or df.empty:
+    if df is None or df.empty or len(df) < 26:  # Aseguramos mínimo de datos
         return pd.DataFrame()
         
     df = df.copy()
-    close = df[f'{symbol}_Close']
-    high = df[f'{symbol}_High']
-    low = df[f'{symbol}_Low']
-    volume = df[f'{symbol}_Volume']
-    
-    df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
-        high=high, low=low, close=close, volume=volume)
-    df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close, window=20)
-    df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(close, window=50)
-    df[f'{symbol}_SMA20'] = close.rolling(window=20).mean()
-    df[f'{symbol}_SMA50'] = close.rolling(window=50).mean()
-    
-    df[f'{symbol}_RSI'] = ta.momentum.rsi(close)
-    df[f'{symbol}_MACD'] = ta.trend.macd_diff(close)
-    df[f'{symbol}_MACD_signal'] = ta.trend.macd_signal(close)
-    df[f'{symbol}_MACD_line'] = ta.trend.macd(close)
-    df[f'{symbol}_Stoch_RSI'] = ta.momentum.stochrsi(close)
-    df[f'{symbol}_MFI'] = ta.volume.money_flow_index(high, low, close, volume)
-    df[f'{symbol}_TSI'] = ta.momentum.tsi(close)
-    
-    df[f'{symbol}_ADX'] = ta.trend.adx(high, low, close)
-    df[f'{symbol}_CCI'] = ta.trend.cci(high, low, close)
-    df[f'{symbol}_DPO'] = ta.trend.dpo(close)
-    df[f'{symbol}_TRIX'] = ta.trend.trix(close)
-    
-    df[f'{symbol}_BB_upper'] = ta.volatility.bollinger_hband(close)
-    df[f'{symbol}_BB_middle'] = ta.volatility.bollinger_mavg(close)
-    df[f'{symbol}_BB_lower'] = ta.volatility.bollinger_lband(close)
-    df[f'{symbol}_ATR'] = ta.volatility.average_true_range(high, low, close)
-    df[f'{symbol}_KC_upper'] = ta.volatility.keltner_channel_hband(high, low, close)
-    df[f'{symbol}_KC_lower'] = ta.volatility.keltner_channel_lband(high, low, close)
-    
-    df[f'{symbol}_OBV'] = ta.volume.on_balance_volume(close, volume)
-    df[f'{symbol}_Force_Index'] = ta.volume.force_index(close, volume)
-    df[f'{symbol}_EOM'] = ta.volume.ease_of_movement(high, low, volume)
-    df[f'{symbol}_Volume_SMA'] = volume.rolling(window=20).mean()
-    
-    df = calculate_ichimoku(df, symbol)
+    try:
+        close = df[f'{symbol}_Close']
+        high = df[f'{symbol}_High']
+        low = df[f'{symbol}_Low']
+        volume = df[f'{symbol}_Volume']
+        
+        # Indicadores con ventanas más pequeñas primero
+        window_14 = min(14, len(df) - 1)
+        window_20 = min(20, len(df) - 1)
+        window_50 = min(50, len(df) - 1)
+        
+        df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(high=high, low=low, close=close, volume=volume)
+        df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close, window=window_20)
+        df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(close, window=window_50)
+        df[f'{symbol}_SMA20'] = close.rolling(window=window_20).mean()
+        df[f'{symbol}_SMA50'] = close.rolling(window=window_50).mean()
+        
+        df[f'{symbol}_RSI'] = ta.momentum.rsi(close, window=window_14)
+        df[f'{symbol}_MACD'] = ta.trend.macd_diff(close)
+        df[f'{symbol}_MACD_signal'] = ta.trend.macd_signal(close)
+        df[f'{symbol}_MACD_line'] = ta.trend.macd(close)
+        df[f'{symbol}_Stoch_RSI'] = ta.momentum.stochrsi(close)
+        df[f'{symbol}_MFI'] = ta.volume.money_flow_index(high, low, close, volume, window=window_14)
+        df[f'{symbol}_TSI'] = ta.momentum.tsi(close)
+        
+        df[f'{symbol}_ADX'] = ta.trend.adx(high, low, close, window=window_14)
+        df[f'{symbol}_CCI'] = ta.trend.cci(high, low, close, window=window_20)
+        df[f'{symbol}_DPO'] = ta.trend.dpo(close)
+        df[f'{symbol}_TRIX'] = ta.trend.trix(close)
+        
+        df[f'{symbol}_BB_upper'] = ta.volatility.bollinger_hband(close)
+        df[f'{symbol}_BB_middle'] = ta.volatility.bollinger_mavg(close)
+        df[f'{symbol}_BB_lower'] = ta.volatility.bollinger_lband(close)
+        df[f'{symbol}_ATR'] = ta.volatility.average_true_range(high, low, close, window=window_14)
+        df[f'{symbol}_KC_upper'] = ta.volatility.keltner_channel_hband(high, low, close)
+        df[f'{symbol}_KC_lower'] = ta.volatility.keltner_channel_lband(high, low, close)
+        
+        df[f'{symbol}_OBV'] = ta.volume.on_balance_volume(close, volume)
+        df[f'{symbol}_Force_Index'] = ta.volume.force_index(close, volume)
+        df[f'{symbol}_EOM'] = ta.volume.ease_of_movement(high, low, volume)
+        df[f'{symbol}_Volume_SMA'] = volume.rolling(window=window_20).mean()
+        
+        df = calculate_ichimoku(df, symbol)
+        
+    except Exception as e:
+        st.error(f"Error calculando indicadores para {symbol}: {e}")
     
     return df.fillna(method='ffill').fillna(method='bfill')
 
