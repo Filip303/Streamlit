@@ -8,7 +8,6 @@ import ta
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 
-# Función para obtener datos del portafolio
 def get_portfolio_data(tickers, period, interval):
     portfolio_data = pd.DataFrame()
     info_dict = {}
@@ -25,8 +24,7 @@ def get_portfolio_data(tickers, period, interval):
         except Exception as e:
             st.warning(f"Error getting data for {ticker}: {e}")
     return portfolio_data, info_dict
-    
-# Función para ordenar los activos en la estructura jerárquica
+
 def quasi_diag(link):
     link = link.astype(int)
     sort_ix = []
@@ -39,47 +37,29 @@ def quasi_diag(link):
             sort_ix.append(link[i, 0])
     return np.array([x for x in sort_ix if x < num_items])
 
-# Función para calcular los pesos HRP
 def hierarchical_risk_parity(returns):
     try:
-        returns = returns.dropna(axis=1, how='all')  # Eliminar columnas con solo NaN
+        returns = returns.dropna(axis=1, how='all')
         if returns.empty:
-            raise ValueError("No hay datos suficientes en los retornos.")
+            raise ValueError("No sufficient data in returns.")
 
-        # Calcular la matriz de correlación
-        corr = returns.corr().fillna(0)
-        dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, 1))  # Convertir la correlación en distancias
-
-        # Verificar que la matriz de distancias no esté vacía
-        if dist.isna().all().all():
-            raise ValueError("Matriz de distancias no válida.")
-
-        # Crear la matriz de distancias
-        dist_matrix = squareform(dist)
-        
-        # Realizar el clustering jerárquico
-        link = linkage(dist_matrix, method='ward')
-
-        # Organizar los activos de acuerdo con el árbol jerárquico
+        corr = returns.corr()
+        dist = np.sqrt(0.5 * (1 - corr))
+        dist_condensed = squareform(dist)
+        link = linkage(dist_condensed, 'single')
         sort_ix = quasi_diag(link)
-        sorted_returns = returns.iloc[:, sort_ix]
-
-        # Asignación de pesos usando la varianza de cada activo
-        var = sorted_returns.var().replace(0, np.finfo(float).eps)
-        weights = 1 / var  # Inverso de la varianza
-        weights = weights / weights.sum()  # Normalizar para que la suma sea 1
-
-        return pd.Series(weights, index=sorted_returns.columns)
-
-    except Exception as e:
-        st.error(f"Error in HRP: {e}")
-        return pd.Series({col: 1.0 / len(returns.columns) for col in returns.columns})
+        
+        var = returns.var()
+        weights = 1/var
+        weights = weights/weights.sum()
+        weights = pd.Series(weights, index=returns.columns)
+        
+        return weights
 
     except Exception as e:
-        st.error(f"Error in HRP: {e}")
-        return pd.Series({col: 1.0 / len(returns.columns) for col in returns.columns})
+        st.error(f"Error in HRP calculation: {e}")
+        return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
 
-# Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
     try:
         benchmarks = ['SPY', 'URTH']
@@ -96,7 +76,6 @@ def get_benchmark_data(period, interval):
         st.error(f"Error getting benchmark data: {e}")
         return None
 
-# Función para calcular indicadores técnicos
 def calculate_technical_indicators(df, symbol):
     if df is None or df.empty:
         return pd.DataFrame()
@@ -107,15 +86,12 @@ def calculate_technical_indicators(df, symbol):
     low = df[f'{symbol}_Low']
     volume = df[f'{symbol}_Volume']
     
-    # Indicadores básicos
     df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
         high=high, low=low, close=close, volume=volume)
     df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close, window=20)
     df[f'{symbol}_EMA50'] = ta.trend.ema_indicator(close, window=50)
     df[f'{symbol}_SMA20'] = close.rolling(window=20).mean()
     df[f'{symbol}_SMA50'] = close.rolling(window=50).mean()
-    
-    # Indicadores adicionales
     df[f'{symbol}_RSI'] = ta.momentum.rsi(close)
     df[f'{symbol}_MACD'] = ta.trend.macd_diff(close)
     df[f'{symbol}_BB_upper'] = ta.volatility.bollinger_hband(close)
@@ -127,67 +103,93 @@ def calculate_technical_indicators(df, symbol):
     
     return df.fillna(method='ffill').fillna(method='bfill')
 
-# Función para calcular métricas del portafolio
+def calculate_var_cvar(returns, confidence_level=0.95):
+    try:
+        if isinstance(returns, pd.Series):
+            returns = returns.dropna()
+        
+        if len(returns) < 2:
+            return 0, 0
+            
+        returns_array = np.array(returns)
+        var = np.percentile(returns_array, (1 - confidence_level) * 100)
+        cvar = returns_array[returns_array <= var].mean()
+        
+        return var, cvar if not np.isnan(cvar) else var
+        
+    except Exception as e:
+        st.error(f"Error calculating VaR/CVaR: {e}")
+        return 0, 0
+
 def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
     try:
         metrics = {}
         
-        # Rendimientos del portafolio
         returns = portfolio_data.filter(like='Close').pct_change()
         returns.columns = [col.replace('_Close', '') for col in returns.columns]
         portfolio_return = (returns * weights).sum(axis=1)
         
-        # Obtener datos de benchmarks
-        benchmark_data = get_benchmark_data(period, interval)
-        benchmark_returns = benchmark_data.pct_change() if benchmark_data is not None else None
+        mean_return = portfolio_return.mean()
+        std_return = portfolio_return.std()
         
-        for name, ret in [('Portfolio', portfolio_return)] + (
-            [('SPY', benchmark_returns['SPY_Close']), ('URTH', benchmark_returns['URTH_Close'])] 
-            if benchmark_returns is not None else []
-        ):
-            mean_return = ret.mean()
-            std_return = ret.std() or 1e-6
-            
+        if std_return > 0:
             sharpe = np.sqrt(252) * (mean_return - risk_free_rate/252) / std_return
             
-            downside_returns = ret[ret < 0]
-            downside_std = downside_returns.std() or 1e-6
+            downside_returns = portfolio_return[portfolio_return < 0]
+            downside_std = downside_returns.std() if not downside_returns.empty else std_return
             sortino = np.sqrt(252) * (mean_return - risk_free_rate/252) / downside_std
             
-            cum_returns = (1 + ret).cumprod()
+            cum_returns = (1 + portfolio_return).cumprod()
             rolling_max = cum_returns.expanding().max()
             drawdowns = (cum_returns - rolling_max) / rolling_max
             max_drawdown = drawdowns.min()
             
-            calmar = abs(252 * mean_return / (max_drawdown or -1e-6))
+            var, cvar = calculate_var_cvar(portfolio_return)
             
-            metrics[name] = {
-                'Sharpe': np.clip(sharpe, -100, 100),
-                'Sortino': np.clip(sortino, -100, 100),
-                'Calmar': np.clip(calmar, -100, 100),
+            metrics['Portfolio'] = {
+                'Returns': cum_returns,
+                'Sharpe': sharpe,
+                'Sortino': sortino,
                 'Max Drawdown': max_drawdown,
-                'Returns': cum_returns
+                'VaR': var,
+                'CVaR': cvar
             }
+            
+            # Calculate benchmark metrics if available
+            benchmark_data = get_benchmark_data(period, interval)
+            if benchmark_data is not None:
+                for bench in ['SPY', 'URTH']:
+                    bench_returns = benchmark_data[f'{bench}_Close'].pct_change()
+                    bench_mean = bench_returns.mean()
+                    bench_std = bench_returns.std()
+                    
+                    if bench_std > 0:
+                        bench_sharpe = np.sqrt(252) * (bench_mean - risk_free_rate/252) / bench_std
+                        bench_downside = bench_returns[bench_returns < 0]
+                        bench_downside_std = bench_downside.std() if not bench_downside.empty else bench_std
+                        bench_sortino = np.sqrt(252) * (bench_mean - risk_free_rate/252) / bench_downside_std
+                        
+                        bench_cum_returns = (1 + bench_returns).cumprod()
+                        bench_rolling_max = bench_cum_returns.expanding().max()
+                        bench_drawdowns = (bench_cum_returns - bench_rolling_max) / bench_rolling_max
+                        bench_max_drawdown = bench_drawdowns.min()
+                        
+                        bench_var, bench_cvar = calculate_var_cvar(bench_returns)
+                        
+                        metrics[bench] = {
+                            'Returns': bench_cum_returns,
+                            'Sharpe': bench_sharpe,
+                            'Sortino': bench_sortino,
+                            'Max Drawdown': bench_max_drawdown,
+                            'VaR': bench_var,
+                            'CVaR': bench_cvar
+                        }
         
         return metrics
         
     except Exception as e:
         st.error(f"Error in metrics calculation: {e}")
         return None
-
-# Función para calcular VaR y CVaR
-def calculate_var_cvar(returns, confidence_level=0.95):
-    if returns.empty:
-        raise ValueError("No hay datos para calcular VaR y CVaR.")
-    
-    sorted_returns = returns.dropna().sort_values()
-    if sorted_returns.empty:
-        raise ValueError("Datos insuficientes tras filtrar.")
-    
-    var_index = int((1 - confidence_level) * len(sorted_returns))
-    var = sorted_returns.iloc[var_index]
-    cvar = sorted_returns[sorted_returns <= var].mean()
-    return var, cvar
 
 # Configuración de la página
 st.set_page_config(page_title="Trading Platform V2", layout="wide")
@@ -241,26 +243,22 @@ if portfolio_data is not None and not portfolio_data.empty:
             if 'SPY' in metrics:
                 columns.extend(['SPY', 'URTH'])
                 
-            # Crear el DataFrame de métricas
             metrics_data = {
-                'Metric': ['Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Max Drawdown', 'VaR (95%)', 'CVaR (95%)']
+                'Metric': ['Sharpe Ratio', 'Sortino Ratio', 'Max Drawdown', 'VaR (95%)', 'CVaR (95%)']
             }
             
             for col in columns:
-                var, cvar = calculate_var_cvar(metrics[col]['Returns'], confidence_level=0.95)
                 metrics_data[col] = [
                     f"{metrics[col]['Sharpe']:.2f}",
                     f"{metrics[col]['Sortino']:.2f}",
-                    f"{metrics[col]['Calmar']:.2f}",
                     f"{metrics[col]['Max Drawdown']:.2%}",
-                    f"{var:.2%}",
-                    f"{cvar:.2%}"
+                    f"{metrics[col]['VaR']:.2%}",
+                    f"{metrics[col]['CVaR']:.2%}"
                 ]
             
             metrics_df = pd.DataFrame(metrics_data)
             st.dataframe(metrics_df)
             
-            # Gráfico de rendimientos acumulados
             fig = go.Figure()
             for col in columns:
                 fig.add_trace(go.Scatter(
@@ -282,7 +280,6 @@ if portfolio_data is not None and not portfolio_data.empty:
         selected_symbol = st.selectbox("Select Asset", symbols)
         technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
         
-        # Gráfico principal de precios
         fig = go.Figure()
         
         if chart_type == 'Candlestick':
@@ -330,6 +327,7 @@ if portfolio_data is not None and not portfolio_data.empty:
         fig.update_layout(
             title=f"Technical Analysis - {selected_symbol}",
             xaxis_title="Date",
+            yaxis_title="Date",
             yaxis_title="Price",
             height=600,
             yaxis_type='log' if use_log else 'linear'
@@ -359,7 +357,29 @@ if portfolio_data is not None and not portfolio_data.empty:
                 
                 st.plotly_chart(indicator_fig, use_container_width=True)
 
+        # Panel de Trading
+        st.subheader("Trading Panel")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            operation = st.radio("Operation Type", ["Buy", "Sell"])
+            quantity = st.number_input("Quantity", min_value=1, value=1)
+        
+        with col2:
+            price = st.number_input(
+                "Price",
+                min_value=0.01,
+                value=float(technical_data[f'{selected_symbol}_Close'].iloc[-1]),
+                format="%.2f"
+            )
+            
+            total = price * quantity
+            st.write(f"Total operation value: ${total:,.2f}")
+        
+        if st.button("Execute Order"):
+            st.success(f"{operation} order executed: {quantity} {selected_symbol} at ${price:.2f}")
+
 # Mensaje en la barra lateral
 if __name__ == "__main__":
     st.sidebar.markdown("---")
-    st.sidebar.info("Demo platform - Not for real trading / Plataforma de demostración - No usar para trading real")
+    st.sidebar.info("Demo platform - Not for real trading")
