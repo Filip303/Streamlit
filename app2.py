@@ -394,19 +394,43 @@ def display_trading_interface():
 
 def display_technical_analysis_tab(portfolio_data, symbols):
     st.header("Análisis Técnico")
+    
+    # Seleccionar el símbolo (activo)
     selected_symbol = st.selectbox("Seleccionar Activo", symbols, key='technical_symbol')
     
     if selected_symbol:
+        # Calcular los indicadores técnicos
         df = calculate_technical_indicators(portfolio_data, selected_symbol)
+        
         if not df.empty:
-            st.write(f"Indicadores Técnicos para {selected_symbol}")
-            st.dataframe(df.tail())
+            # Menú desplegable para seleccionar el indicador técnico
+            indicator_options = [
+                "RSI", "MACD", "MACD Signal", "MACD Line", "Stoch RSI", "MFI", "TSI",
+                "ADX", "CCI", "DPO", "TRIX", "BB Upper", "BB Middle", "BB Lower",
+                "ATR", "KC Upper", "KC Lower", "OBV", "Force Index", "EOM", "Volume SMA",
+                "Tenkan Sen", "Kijun Sen", "Senkou Span A", "Senkou Span B", "Chikou Span"
+            ]
             
-            # Gráfico de RSI
-            fig_rsi = go.Figure()
-            fig_rsi.add_trace(go.Scatter(x=df.index, y=df[f'{selected_symbol}_RSI'], name='RSI'))
-            fig_rsi.update_layout(title=f"RSI para {selected_symbol}", xaxis_title="Fecha", yaxis_title="RSI")
-            st.plotly_chart(fig_rsi, use_container_width=True)
+            selected_indicator = st.selectbox("Seleccionar Indicador Técnico", indicator_options)
+            
+            # Mostrar el gráfico del indicador seleccionado
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df.index,
+                y=df[f'{selected_symbol}_{selected_indicator.replace(" ", "_")}'],
+                name=selected_indicator
+            ))
+            
+            fig.update_layout(
+                title=f"{selected_indicator} para {selected_symbol}",
+                xaxis_title="Fecha",
+                yaxis_title=selected_indicator,
+                height=600
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("No se encontraron datos para el activo seleccionado.")
 
 def display_news_tab():
     st.header("Noticias")
