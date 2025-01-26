@@ -22,7 +22,7 @@ def get_portfolio_data(tickers, period, interval):
                     portfolio_data[f"{ticker}_{col}"] = df[col]
                 info_dict[ticker] = stock.info
         except Exception as e:
-            st.warning(f"Error getting data for {ticker}: {e}")
+            st.warning(f"Error al obtener datos para {ticker}: {e}")
     return portfolio_data, info_dict
 
 def get_benchmark_data(period, interval):
@@ -36,13 +36,11 @@ def get_benchmark_data(period, interval):
                 benchmark_data[f"{ticker}_Close"] = df['Close']
         return benchmark_data
     except Exception as e:
-        st.error(f"Error getting benchmark data: {e}")
+        st.error(f"Error al obtener datos de benchmark: {e}")
         return None
 
 def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
-    """Calculate HAR volatility forecast with increased scale"""
     rv = returns ** 2
-    
     rv_daily = rv.rolling(window=lags[0]).mean()
     rv_weekly = rv.rolling(window=lags[1]).mean()
     rv_monthly = rv.rolling(window=lags[2]).mean()
@@ -58,26 +56,25 @@ def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
     model = sm.OLS(y, X).fit()
     
     forecast = model.predict(X.iloc[-1:]).iloc[0]
-    return np.sqrt(forecast) * scale_factor  # Aplicamos factor de escala para ampliar horquilla
+    return np.sqrt(forecast) * scale_factor
 
-def calculate_dynamic_levels(data, symbol, confidence_level=0.95):
-    """Calculate dynamic stop loss and take profit using HAR volatility"""
-    returns = pd.Series(np.log(data[f'{symbol}_Close']).diff().dropna())
-    
-    conditional_vol = calculate_har_volatility(returns)
-    z_score = norm.ppf(confidence_level)
-    current_price = data[f'{symbol}_Close'].iloc[-1]
-    
-    stop_loss = current_price * np.exp(-z_score * conditional_vol)
-    take_profit = current_price * np.exp(z_score * conditional_vol)
-    
-    return stop_loss, take_profit, conditional_vol
+def quasi_diag(link):
+    link = link.astype(int)
+    sort_ix = []
+    sort_ix.extend([link[-1, 0], link[-1, 1]])
+    num_items = link[-1, 3]
+    for i in range(len(link) - 2, -1, -1):
+        if link[i, 0] >= num_items:
+            sort_ix.append(link[i, 1])
+        elif link[i, 1] >= num_items:
+            sort_ix.append(link[i, 0])
+    return np.array([x for x in sort_ix if x < num_items])
 
 def hierarchical_risk_parity(returns):
     try:
         returns = returns.dropna(axis=1, how='all')
         if returns.empty:
-            raise ValueError("No sufficient data in returns.")
+            raise ValueError("No hay suficientes datos en los retornos.")
 
         corr = returns.corr()
         dist = np.sqrt(0.5 * (1 - corr))
@@ -91,8 +88,20 @@ def hierarchical_risk_parity(returns):
         
         return weights
     except Exception as e:
-        st.error(f"Error in HRP calculation: {e}")
+        st.error(f"Error en cálculo HRP: {e}")
         return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
+
+def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplier=3):
+    returns = pd.Series(np.log(data[f'{symbol}_Close']).diff().dropna())
+    conditional_vol = calculate_har_volatility(returns)
+    z_score = norm.ppf(confidence_level)
+    current_price = data[f'{symbol}_Close'].iloc[-1]
+    
+    stop_loss = current_price * np.exp(-z_score * conditional_vol)
+    risk = current_price - stop_loss
+    take_profit = current_price + (risk * risk_multiplier)
+    
+    return stop_loss, take_profit, conditional_vol
 
 def calculate_technical_indicators(df, symbol):
     if df is None or df.empty:
@@ -134,9 +143,8 @@ def calculate_var_cvar(returns, confidence_level=0.95):
         cvar = returns_array[returns_array <= var].mean()
         
         return var, cvar if not np.isnan(cvar) else var
-        
     except Exception as e:
-        st.error(f"Error calculating VaR/CVaR: {e}")
+        st.error(f"Error en cálculo VaR/CVaR: {e}")
         return 0, 0
 
 def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
@@ -173,7 +181,6 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
                 'CVaR': cvar
             }
             
-            # Calculate benchmark metrics
             benchmark_data = get_benchmark_data(period, interval)
             if benchmark_data is not None:
                 for bench in ['SPY', 'URTH']:
@@ -204,14 +211,13 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
                         }
         
         return metrics
-        
     except Exception as e:
-        st.error(f"Error in metrics calculation: {e}")
+        st.error(f"Error en cálculo de métricas: {e}")
         return None
 
 # Configuración de la página
-st.set_page_config(page_title="Trading Platform Pro V3", layout="wide")
-st.title("📈 Trading Platform Pro V3")
+st.set_page_config(page_title="Trading Platform Pro V4", layout="wide")
+st.title("📈 Trading Platform Pro V4")
 
 # Sidebar
 with st.sidebar:
@@ -219,16 +225,8 @@ with st.sidebar:
     symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
     symbols = [s.strip() for s in symbols_input.split(",")]
     
-    period = st.selectbox(
-        "Período",
-        options=["1mo", "3mo", "6mo", "1y", "2y", "5y"],
-        index=2
-    )
-    interval = st.selectbox(
-        "Intervalo",
-        options=["1d", "5d", "1wk", "1mo"],
-        index=0
-    )
+    period = st.selectbox("Período", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=2)
+    interval = st.selectbox("Intervalo", ["1d", "5d", "1wk", "1mo"], index=0)
     chart_type = st.selectbox("Tipo de Gráfico", ['Candlestick', 'OHLC', 'Line'])
     use_log = st.checkbox("Escala Logarítmica", value=False)
     confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
@@ -250,7 +248,25 @@ if portfolio_data is not None and not portfolio_data.empty:
     weights = hierarchical_risk_parity(returns)
     metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
     
-    tab1, tab2, tab3 = st.tabs(["Análisis de Cartera", "Análisis Técnico", "Panel de Trading"])
+    # Panel de Métricas
+    with st.expander("📊 Panel de Métricas", expanded=True):
+        if metrics:
+            metrics_df = pd.DataFrame(columns=['Métrica', 'Portfolio', 'SPY', 'URTH'])
+            metrics_df['Métrica'] = ['Sharpe Ratio', 'Sortino Ratio', 'Max Drawdown', 'VaR', 'CVaR']
+            
+            for name in ['Portfolio', 'SPY', 'URTH']:
+                if name in metrics:
+                    metrics_df[name] = [
+                        f"{metrics[name]['Sharpe']:.2f}",
+                        f"{metrics[name]['Sortino']:.2f}",
+                        f"{metrics[name]['Max Drawdown']:.2%}",
+                        f"{metrics[name]['VaR']:.2%}",
+                        f"{metrics[name]['CVaR']:.2%}"
+                    ]
+            
+            st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+    
+    tab1, tab2 = st.tabs(["Análisis de Cartera", "Análisis Técnico"])
     
     with tab1:
         st.subheader("Composición de la Cartera (HRP)")
@@ -264,35 +280,22 @@ if portfolio_data is not None and not portfolio_data.empty:
         
         st.dataframe(weights_df.round(2))
         
-        metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
-        if metrics:
-            st.subheader("Métricas de Rendimiento")
-            cols = st.columns(len(metrics))
-            
-            for i, (name, metric) in enumerate(metrics.items()):
-                with cols[i]:
-                    st.metric(f"{name} Sharpe", f"{metric['Sharpe']:.2f}")
-                    st.metric(f"{name} Sortino", f"{metric['Sortino']:.2f}")
-                    st.metric(f"{name} Max Drawdown", f"{metric['Max Drawdown']:.2%}")
-                    st.metric(f"{name} VaR", f"{metric['VaR']:.2%}")
-                    st.metric(f"{name} CVaR", f"{metric['CVaR']:.2%}")
-            
-            fig = go.Figure()
-            for name, metric in metrics.items():
-                fig.add_trace(go.Scatter(
-                    x=metric['Returns'].index,
-                    y=metric['Returns'],
-                    name=name
-                ))
-            
-            fig.update_layout(
-                title="Comparación de Rendimiento",
-                xaxis_title="Fecha",
-                yaxis_title="Retorno Acumulado",
-                height=500,
-                yaxis_type='log' if use_log else 'linear'
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        fig = go.Figure()
+        for name, metric in metrics.items():
+            fig.add_trace(go.Scatter(
+                x=metric['Returns'].index,
+                y=metric['Returns'],
+                name=name
+            ))
+        
+        fig.update_layout(
+            title="Comparación de Rendimiento",
+            xaxis_title="Fecha",
+            yaxis_title="Retorno Acumulado",
+            height=500,
+            yaxis_type='log' if use_log else 'linear'
+        )
+        st.plotly_chart(fig, use_container_width=True)
     
     with tab2:
         selected_symbol = st.selectbox("Seleccionar Activo", symbols)
@@ -374,27 +377,23 @@ if portfolio_data is not None and not portfolio_data.empty:
                 
                 st.plotly_chart(indicator_fig, use_container_width=True)
     
-    with tab3:
-        selected_symbol = st.selectbox("Seleccionar Activo para Trading", symbols)
-        stop_loss, take_profit, volatility = calculate_dynamic_levels(
-            portfolio_data, selected_symbol, confidence_level)
+    # Panel de Trading
+    with st.expander("💹 Panel de Trading", expanded=True):
+        selected_symbol = st.selectbox("Seleccionar Activo para Trading", symbols, key='trading_symbol')
+        risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", min_value=2.0, max_value=5.0, value=3.0, step=0.1)
         
-        col1, col2 = st.columns([2, 1])
+        stop_loss, take_profit, volatility = calculate_dynamic_levels(
+            portfolio_data, selected_symbol, confidence_level, risk_multiplier)
+        
+        current_price = portfolio_data[f'{selected_symbol}_Close'].iloc[-1]
+        
+        col1, col2 = st.columns([7, 3])
         
         with col1:
             fig = go.Figure()
             
             if chart_type == 'Candlestick':
                 fig.add_trace(go.Candlestick(
-                    x=portfolio_data.index,
-                    open=portfolio_data[f'{selected_symbol}_Open'],
-                    high=portfolio_data[f'{selected_symbol}_High'],
-                    low=portfolio_data[f'{selected_symbol}_Low'],
-                    close=portfolio_data[f'{selected_symbol}_Close'],
-                    name=selected_symbol
-                ))
-            elif chart_type == 'OHLC':
-                fig.add_trace(go.Ohlc(
                     x=portfolio_data.index,
                     open=portfolio_data[f'{selected_symbol}_Open'],
                     high=portfolio_data[f'{selected_symbol}_High'],
@@ -409,12 +408,10 @@ if portfolio_data is not None and not portfolio_data.empty:
                     name=selected_symbol
                 ))
             
-            current_price = portfolio_data[f'{selected_symbol}_Close'].iloc[-1]
-            
             fig.add_hline(y=stop_loss, line_color="red", line_dash="dash",
-                         annotation_text="Stop Loss Dinámico")
+                         annotation_text=f"Stop Loss (${stop_loss:.2f})")
             fig.add_hline(y=take_profit, line_color="green", line_dash="dash",
-                         annotation_text="Take Profit Dinámico")
+                         annotation_text=f"Take Profit {risk_multiplier}x (${take_profit:.2f})")
             
             fig.update_layout(
                 title=f"Trading View - {selected_symbol}",
@@ -426,8 +423,6 @@ if portfolio_data is not None and not portfolio_data.empty:
             st.plotly_chart(fig, use_container_width=True)
         
         with col2:
-            st.subheader("Panel de Trading")
-            
             if info_dict.get(selected_symbol):
                 info = info_dict[selected_symbol]
                 st.write(f"**Nombre:** {info.get('longName', 'N/A')}")
@@ -435,40 +430,27 @@ if portfolio_data is not None and not portfolio_data.empty:
                 st.write(f"**Industria:** {info.get('industry', 'N/A')}")
             
             st.metric("Precio Actual", f"${current_price:.2f}")
-            st.metric("Volatilidad Condicional", f"{volatility:.2%}")
+            st.metric("Volatilidad", f"{volatility:.2%}")
+            st.metric("Stop Loss", f"${stop_loss:.2f}", 
+                     f"{(stop_loss/current_price - 1):.2%}")
+            st.metric("Take Profit", f"${take_profit:.2f}", 
+                     f"{(take_profit/current_price - 1):.2%}")
             
-            operation = st.radio("Tipo de Operación", ["Comprar", "Vender"])
+            risk_amount = current_price - stop_loss
+            reward_amount = take_profit - current_price
+            risk_reward_ratio = reward_amount / risk_amount if risk_amount != 0 else float('inf')
+            
+            st.metric("Ratio Riesgo/Beneficio", f"{risk_reward_ratio:.2f}")
+            
             quantity = st.number_input("Cantidad", min_value=1, value=1)
-            
-            use_dynamic_levels = st.checkbox("Usar Niveles Dinámicos", value=True)
-            
-            if use_dynamic_levels:
-                sl_price = stop_loss
-                tp_price = take_profit
-            else:
-                sl_price = st.number_input("Stop Loss Manual", 
-                                         value=float(stop_loss),
-                                         step=0.01)
-                tp_price = st.number_input("Take Profit Manual", 
-                                         value=float(take_profit),
-                                         step=0.01)
-            
-            st.metric("Stop Loss", f"${sl_price:.2f}", 
-                     f"{(sl_price/current_price - 1):.2%}")
-            st.metric("Take Profit", f"${tp_price:.2f}", 
-                     f"{(tp_price/current_price - 1):.2%}")
-            
             total = current_price * quantity
             st.write(f"Total de la operación: ${total:,.2f}")
             
-            if st.button("Ejecutar Orden"):
-                st.success(f"""
-                Orden ejecutada:
-                - {operation} {quantity} {selected_symbol} a ${current_price:.2f}
-                - Stop Loss: ${sl_price:.2f} ({(sl_price/current_price - 1):.2%})
-                - Take Profit: ${tp_price:.2f} ({(tp_price/current_price - 1):.2%})
-                - Total: ${total:,.2f}
-                """)
+            risk_total = (current_price - stop_loss) * quantity
+            reward_total = (take_profit - current_price) * quantity
+            
+            st.write(f"Riesgo máximo: ${risk_total:.2f}")
+            st.write(f"Beneficio objetivo: ${reward_total:.2f}")
 
 # Información adicional
 st.sidebar.markdown("---")
@@ -476,8 +458,8 @@ st.sidebar.info("""
 Características:
 - Análisis de cartera con HRP
 - Indicadores técnicos avanzados
-- Stop Loss/Take Profit dinámicos usando VAR y HAR
-- Optimización de cartera
+- Stop Loss/Take Profit dinámicos con HAR
+- Ratio de riesgo/beneficio ajustable
 - Múltiples tipos de gráficos
 - Escala logarítmica opcional
 """)
