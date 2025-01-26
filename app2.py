@@ -306,7 +306,7 @@ if portfolio_data is not None and not portfolio_data.empty:
         if chart_type == 'Candlestick':
             fig.add_trace(go.Candlestick(
                 x=technical_data.index,
-                open=technical_data[fopen=technical_data[f'{selected_symbol}_Open'],
+                open=technical_data[f'{selected_symbol}_Open'],
                 high=technical_data[f'{selected_symbol}_High'],
                 low=technical_data[f'{selected_symbol}_Low'],
                 close=technical_data[f'{selected_symbol}_Close'],
