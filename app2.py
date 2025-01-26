@@ -698,49 +698,25 @@ if portfolio_data is not None and not portfolio_data.empty:
         with col1:
             fig = go.Figure()
             
-            if chart_type == 'Candlestick':
-                fig.add_trace(go.Candlestick(
-                    x=portfolio_data.index,
-                    open=portfolio_data[f'{selected_symbol}_Open'],
-                    high=portfolio_data[f'{selected_symbol}_High'],
-                    low=portfolio_data[f'{selected_symbol}_Low'],
-                    close=portfolio_data[f'{selected_symbol}_Close'],
-                    name=selected_symbol
-                ))
-            else:
-                fig.add_trace(go.Scatter(
-                    x=portfolio_data.index,
-                    y=portfolio_data[f'{selected_symbol}_Close'],
-                    name=selected_symbol
-                ))
-
-            fig.add_trace(go.Scatter(
-                x=portfolio_data.index,
-                y=[stop_loss] * len(portfolio_data.index),
-                mode='lines',
-                name='Stop Loss',
-                line=dict(color='red', dash='dash'),
-                showlegend=True
-            ))
-
-            fig.add_trace(go.Scatter(
-                x=portfolio_data.index,
-                y=[take_profit] * len(portfolio_data.index),
-                mode='lines',
-                name='Take Profit',
-                line=dict(color='green', dash='dash'),
-                showlegend=True
-            ))
-            
-            fig.update_layout(
-                title=f"Trading View - {selected_symbol}",
-                xaxis_title="Fecha",
-                yaxis_title="Precio",
-                height=600,
-                yaxis_type='log'
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
+            if selected_symbol and all(f'{selected_symbol}_{col}' in portfolio_data.columns 
+                          for col in ['Open', 'High', 'Low', 'Close']):
+    if chart_type == 'Candlestick':
+        fig.add_trace(go.Candlestick(
+            x=technical_data.index,
+            open=portfolio_data[f'{selected_symbol}_Open'],
+            high=portfolio_data[f'{selected_symbol}_High'],
+            low=portfolio_data[f'{selected_symbol}_Low'],
+            close=portfolio_data[f'{selected_symbol}_Close'],
+            name=selected_symbol
+        ))
+    else:
+        fig.add_trace(go.Scatter(
+            x=portfolio_data.index,
+            y=portfolio_data[f'{selected_symbol}_Close'],
+            name=selected_symbol
+        ))
+else:
+    st.warning(f"No hay datos disponibles para {selected_symbol}")
         
         with col2:
             if info_dict.get(selected_symbol):
