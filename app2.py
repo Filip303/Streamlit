@@ -10,6 +10,7 @@ from scipy.stats import norm
 import statsmodels.api as sm
 import ta
 
+# Función para obtener datos del portafolio
 def get_portfolio_data(tickers, period, interval):
     portfolio_data = pd.DataFrame()
     info_dict = {}
@@ -25,6 +26,7 @@ def get_portfolio_data(tickers, period, interval):
             st.warning(f"Error al obtener datos para {ticker}: {e}")
     return portfolio_data, info_dict
 
+# Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
     try:
         benchmarks = ['SPY', 'URTH']
@@ -39,6 +41,7 @@ def get_benchmark_data(period, interval):
         st.error(f"Error al obtener datos de benchmark: {e}")
         return None
 
+# Función para calcular la volatilidad HAR
 def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
     rv = returns ** 2
     rv_daily = rv.rolling(window=lags[0]).mean()
@@ -58,6 +61,7 @@ def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
     forecast = model.predict(X.iloc[-1:]).iloc[0]
     return np.sqrt(forecast) * scale_factor
 
+# Función para calcular indicadores Ichimoku
 def calculate_ichimoku(df, symbol):
     high = df[f'{symbol}_High']
     low = df[f'{symbol}_Low']
@@ -82,18 +86,7 @@ def calculate_ichimoku(df, symbol):
     
     return df
 
-def quasi_diag(link):
-    link = link.astype(int)
-    sort_ix = []
-    sort_ix.extend([link[-1, 0], link[-1, 1]])
-    num_items = link[-1, 3]
-    for i in range(len(link) - 2, -1, -1):
-        if link[i, 0] >= num_items:
-            sort_ix.append(link[i, 1])
-        elif link[i, 1] >= num_items:
-            sort_ix.append(link[i, 0])
-    return np.array([x for x in sort_ix if x < num_items])
-
+# Función para calcular HRP (Hierarchical Risk Parity)
 def hierarchical_risk_parity(returns):
     try:
         returns = returns.dropna(axis=1, how='all')
@@ -115,6 +108,7 @@ def hierarchical_risk_parity(returns):
         st.error(f"Error en cálculo HRP: {e}")
         return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
 
+# Función para calcular indicadores técnicos
 def calculate_technical_indicators(df, symbol):
     if df is None or df.empty:
         return pd.DataFrame()
@@ -125,7 +119,7 @@ def calculate_technical_indicators(df, symbol):
     low = df[f'{symbol}_Low']
     volume = df[f'{symbol}_Volume']
     
-    # Basic indicators
+    # Indicadores básicos
     df[f'{symbol}_VWAP'] = ta.volume.volume_weighted_average_price(
         high=high, low=low, close=close, volume=volume)
     df[f'{symbol}_EMA20'] = ta.trend.ema_indicator(close, window=20)
@@ -133,7 +127,7 @@ def calculate_technical_indicators(df, symbol):
     df[f'{symbol}_SMA20'] = close.rolling(window=20).mean()
     df[f'{symbol}_SMA50'] = close.rolling(window=50).mean()
     
-    # Momentum indicators
+    # Indicadores de momentum
     df[f'{symbol}_RSI'] = ta.momentum.rsi(close)
     df[f'{symbol}_MACD'] = ta.trend.macd_diff(close)
     df[f'{symbol}_MACD_signal'] = ta.trend.macd_signal(close)
@@ -142,13 +136,13 @@ def calculate_technical_indicators(df, symbol):
     df[f'{symbol}_MFI'] = ta.volume.money_flow_index(high, low, close, volume)
     df[f'{symbol}_TSI'] = ta.momentum.tsi(close)
     
-    # Trend indicators
+    # Indicadores de tendencia
     df[f'{symbol}_ADX'] = ta.trend.adx(high, low, close)
     df[f'{symbol}_CCI'] = ta.trend.cci(high, low, close)
     df[f'{symbol}_DPO'] = ta.trend.dpo(close)
     df[f'{symbol}_TRIX'] = ta.trend.trix(close)
     
-    # Volatility indicators
+    # Indicadores de volatilidad
     df[f'{symbol}_BB_upper'] = ta.volatility.bollinger_hband(close)
     df[f'{symbol}_BB_middle'] = ta.volatility.bollinger_mavg(close)
     df[f'{symbol}_BB_lower'] = ta.volatility.bollinger_lband(close)
@@ -156,17 +150,18 @@ def calculate_technical_indicators(df, symbol):
     df[f'{symbol}_KC_upper'] = ta.volatility.keltner_channel_hband(high, low, close)
     df[f'{symbol}_KC_lower'] = ta.volatility.keltner_channel_lband(high, low, close)
     
-    # Volume indicators
+    # Indicadores de volumen
     df[f'{symbol}_OBV'] = ta.volume.on_balance_volume(close, volume)
     df[f'{symbol}_Force_Index'] = ta.volume.force_index(close, volume)
     df[f'{symbol}_EOM'] = ta.volume.ease_of_movement(high, low, volume)
     df[f'{symbol}_Volume_SMA'] = volume.rolling(window=20).mean()
     
-    # Add Ichimoku indicators
+    # Añadir indicadores Ichimoku
     df = calculate_ichimoku(df, symbol)
     
     return df.fillna(method='ffill').fillna(method='bfill')
 
+# Función para calcular niveles dinámicos (Stop Loss y Take Profit)
 def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplier=3):
     returns = pd.Series(np.log(data[f'{symbol}_Close']).diff().dropna())
     conditional_vol = calculate_har_volatility(returns)
@@ -179,6 +174,7 @@ def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplie
     
     return stop_loss, take_profit, conditional_vol
 
+# Función para calcular VaR y CVaR
 def calculate_var_cvar(returns, confidence_level=0.95):
     try:
         if isinstance(returns, pd.Series):
@@ -196,6 +192,7 @@ def calculate_var_cvar(returns, confidence_level=0.95):
         st.error(f"Error en cálculo VaR/CVaR: {e}")
         return 0, 0
 
+# Función para calcular métricas del portafolio
 def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
     try:
         metrics = {}
@@ -264,6 +261,7 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
         st.error(f"Error en cálculo de métricas: {e}")
         return None
 
+# Función para graficar indicadores
 def plot_indicators(fig, technical_data, selected_symbol, selected_indicators):
     for indicator in selected_indicators:
         if indicator == 'Ichimoku':
@@ -324,6 +322,7 @@ def plot_indicators(fig, technical_data, selected_symbol, selected_indicators):
                 ))
     return fig
 
+# Función para crear subgráficos de indicadores
 def create_indicator_subplot(technical_data, selected_symbol, indicator):
     fig = go.Figure()
     
@@ -505,10 +504,11 @@ if portfolio_data is not None and not portfolio_data.empty:
             info = stock.info
             if not info:
                 st.error(f"Símbolo {selected_symbol} no encontrado")
-                return
+                st.stop()  # Detener la ejecución si no se encuentra el símbolo
         except Exception as e:
             st.error(f"Error al verificar símbolo: {e}")
-            return
+            st.stop()  # Detener la ejecución si hay un error
+
         risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", min_value=2.0, max_value=5.0, value=3.0, step=0.1)
         
         stop_loss, take_profit, volatility = calculate_dynamic_levels(
@@ -518,8 +518,8 @@ if portfolio_data is not None and not portfolio_data.empty:
         trading_data = yf.Ticker(selected_symbol).history(period=period, interval=interval)
         if trading_data.empty:
             st.error("No se pudieron obtener datos para el símbolo seleccionado")
-            return
-            
+            st.stop()  # Detener la ejecución si no hay datos
+
         current_price = trading_data['Close'].iloc[-1]
         trading_data = trading_data.rename(columns={col: f"{selected_symbol}_{col}" for col in trading_data.columns})
         
