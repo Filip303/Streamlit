@@ -50,15 +50,15 @@ def hierarchical_risk_parity(returns):
         sort_ix = quasi_diag(link)
         
         var = returns.var()
-        weights = 1/var
-        weights = weights/weights.sum()
+        weights = 1 / var
+        weights = weights / weights.sum()
         weights = pd.Series(weights, index=returns.columns)
         
         return weights
 
     except Exception as e:
         st.error(f"Error in HRP calculation: {e}")
-        return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
+        return pd.Series({col: 1.0 / len(returns.columns) for col in returns.columns})
 
 def get_benchmark_data(period, interval):
     try:
@@ -133,11 +133,11 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
         std_return = portfolio_return.std()
         
         if std_return > 0:
-            sharpe = np.sqrt(252) * (mean_return - risk_free_rate/252) / std_return
+            sharpe = np.sqrt(252) * (mean_return - risk_free_rate / 252) / std_return
             
             downside_returns = portfolio_return[portfolio_return < 0]
             downside_std = downside_returns.std() if not downside_returns.empty else std_return
-            sortino = np.sqrt(252) * (mean_return - risk_free_rate/252) / downside_std
+            sortino = np.sqrt(252) * (mean_return - risk_free_rate / 252) / downside_std
             
             cum_returns = (1 + portfolio_return).cumprod()
             rolling_max = cum_returns.expanding().max()
@@ -164,10 +164,10 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
                     bench_std = bench_returns.std()
                     
                     if bench_std > 0:
-                        bench_sharpe = np.sqrt(252) * (bench_mean - risk_free_rate/252) / bench_std
+                        bench_sharpe = np.sqrt(252) * (bench_mean - risk_free_rate / 252) / bench_std
                         bench_downside = bench_returns[bench_returns < 0]
                         bench_downside_std = bench_downside.std() if not bench_downside.empty else bench_std
-                        bench_sortino = np.sqrt(252) * (bench_mean - risk_free_rate/252) / bench_downside_std
+                        bench_sortino = np.sqrt(252) * (bench_mean - risk_free_rate / 252) / bench_downside_std
                         
                         bench_cum_returns = (1 + bench_returns).cumprod()
                         bench_rolling_max = bench_cum_returns.expanding().max()
@@ -327,7 +327,6 @@ if portfolio_data is not None and not portfolio_data.empty:
         fig.update_layout(
             title=f"Technical Analysis - {selected_symbol}",
             xaxis_title="Date",
-            yaxis_title="Date",
             yaxis_title="Price",
             height=600,
             yaxis_type='log' if use_log else 'linear'
