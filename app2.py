@@ -1,12 +1,14 @@
 import streamlit as st
 import pandas as pd
-import yfinance as yf
 import numpy as np
+import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-import ta
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
+from arch import arch_model
+from scipy.stats import norm
+import ta
 
 def get_portfolio_data(tickers, period, interval):
     portfolio_data = pd.DataFrame()
@@ -15,27 +17,44 @@ def get_portfolio_data(tickers, period, interval):
         try:
             stock = yf.Ticker(ticker)
             df = stock.history(period=period, interval=interval)
-            if df.empty or df.isna().all().all():
-                st.warning(f"No data for ticker {ticker}. Skipping.")
-                continue
-            for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
-                portfolio_data[f"{ticker}_{col}"] = df[col]
-            info_dict[ticker] = stock.info
+            if not df.empty:
+                for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+                    portfolio_data[f"{ticker}_{col}"] = df[col]
+                info_dict[ticker] = stock.info
         except Exception as e:
             st.warning(f"Error getting data for {ticker}: {e}")
     return portfolio_data, info_dict
 
-def quasi_diag(link):
-    link = link.astype(int)
-    sort_ix = []
-    sort_ix.extend([link[-1, 0], link[-1, 1]])
-    num_items = link[-1, 3]
-    for i in range(len(link) - 2, -1, -1):
-        if link[i, 0] >= num_items:
-            sort_ix.append(link[i, 1])
-        elif link[i, 1] >= num_items:
-            sort_ix.append(link[i, 0])
-    return np.array([x for x in sort_ix if x < num_items])
+def get_benchmark_data(period, interval):
+    try:
+        benchmarks = ['SPY', 'URTH']
+        benchmark_data = pd.DataFrame()
+        for ticker in benchmarks:
+            stock = yf.Ticker(ticker)
+            df = stock.history(period=period, interval=interval)
+            if not df.empty:
+                benchmark_data[f"{ticker}_Close"] = df['Close']
+        return benchmark_data
+    except Exception as e:
+        st.error(f"Error getting benchmark data: {e}")
+        return None
+
+def calculate_dynamic_levels(data, symbol, confidence_level=0.95):
+    returns = pd.Series(np.log(data[f'{symbol}_Close']).diff().dropna())
+    
+    model = arch_model(returns, vol='HAR', p=1, lags=[1, 5, 22])
+    results = model.fit(disp='off')
+    
+    forecast = results.forecast(horizon=1)
+    conditional_vol = np.sqrt(forecast.variance.values[-1, 0])
+    
+    z_score = norm.ppf(confidence_level)
+    current_price = data[f'{symbol}_Close'].iloc[-1]
+    
+    stop_loss = current_price * np.exp(-z_score * conditional_vol)
+    take_profit = current_price * np.exp(z_score * conditional_vol)
+    
+    return stop_loss, take_profit, conditional_vol
 
 def hierarchical_risk_parity(returns):
     try:
@@ -47,7 +66,6 @@ def hierarchical_risk_parity(returns):
         dist = np.sqrt(0.5 * (1 - corr))
         dist_condensed = squareform(dist)
         link = linkage(dist_condensed, 'single')
-        sort_ix = quasi_diag(link)
         
         var = returns.var()
         weights = 1 / var
@@ -55,26 +73,9 @@ def hierarchical_risk_parity(returns):
         weights = pd.Series(weights, index=returns.columns)
         
         return weights
-
     except Exception as e:
         st.error(f"Error in HRP calculation: {e}")
-        return pd.Series({col: 1.0 / len(returns.columns) for col in returns.columns})
-
-def get_benchmark_data(period, interval):
-    try:
-        benchmarks = ['SPY', 'URTH']
-        benchmark_data = pd.DataFrame()
-        
-        for ticker in benchmarks:
-            stock = yf.Ticker(ticker)
-            df = stock.history(period=period, interval=interval)
-            if not df.empty:
-                benchmark_data[f"{ticker}_Close"] = df['Close']
-        
-        return benchmark_data
-    except Exception as e:
-        st.error(f"Error getting benchmark data: {e}")
-        return None
+        return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
 
 def calculate_technical_indicators(df, symbol):
     if df is None or df.empty:
@@ -155,7 +156,7 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
                 'CVaR': cvar
             }
             
-            # Calculate benchmark metrics if available
+            # Calculate benchmark metrics
             benchmark_data = get_benchmark_data(period, interval)
             if benchmark_data is not None:
                 for bench in ['SPY', 'URTH']:
@@ -192,26 +193,37 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
         return None
 
 # Configuración de la página
-st.set_page_config(page_title="Trading Platform V2", layout="wide")
+st.set_page_config(page_title="Trading Platform Pro V3", layout="wide")
+st.title("📈 Trading Platform Pro V3")
 
-# Configuración de la barra lateral
+# Sidebar
 with st.sidebar:
-    symbols_input = st.text_input("Symbols (comma separated)", "AAPL,MSFT,GOOGL")
+    st.header("Configuración")
+    symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
     symbols = [s.strip() for s in symbols_input.split(",")]
     
-    period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=2)
-    interval = st.selectbox("Interval", ["1d", "5d", "1wk", "1mo"], index=0)
-    chart_type = st.selectbox("Chart Type", ['Candlestick', 'OHLC', 'Line'])
-    use_log = st.checkbox("Logarithmic Scale", value=False)
-    risk_free_rate = st.number_input("Annual Risk-Free Rate (%)", 0.0, 100.0, 2.0) / 100.0
+    period = st.selectbox(
+        "Período",
+        options=["1mo", "3mo", "6mo", "1y", "2y", "5y"],
+        index=2
+    )
+    interval = st.selectbox(
+        "Intervalo",
+        options=["1d", "5d", "1wk", "1mo"],
+        index=0
+    )
+    chart_type = st.selectbox("Tipo de Gráfico", ['Candlestick', 'OHLC', 'Line'])
+    use_log = st.checkbox("Escala Logarítmica", value=False)
+    confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
+    risk_free_rate = st.number_input("Tasa Libre de Riesgo Anual (%)", 0.0, 100.0, 2.0) / 100.0
     
     available_indicators = [
         'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
         'RSI', 'MACD', 'Bollinger Bands', 'ADX', 'OBV', 'ATR'
     ]
-    selected_indicators = st.multiselect("Technical Indicators", available_indicators)
+    selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators)
 
-# Obtener datos del portafolio
+# Obtener datos
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
@@ -220,64 +232,52 @@ if portfolio_data is not None and not portfolio_data.empty:
     returns.columns = [col.replace('_Close', '') for col in returns.columns]
     weights = hierarchical_risk_parity(returns)
     
-    tab1, tab2, tab3 = st.tabs(["Portfolio Analysis", "Performance Metrics", "Technical Analysis"])
+    tab1, tab2, tab3 = st.tabs(["Análisis de Cartera", "Análisis Técnico", "Panel de Trading"])
     
     with tab1:
-        st.subheader("Portfolio Composition (HRP)")
-        weights_df = pd.DataFrame({'Asset': weights.index, 'Weight': weights.values * 100})
+        st.subheader("Composición de la Cartera (HRP)")
+        weights_df = pd.DataFrame({'Activo': weights.index, 'Peso': weights.values * 100})
         
         if len(symbols) > 1:
-            fig = go.Figure(data=[go.Pie(labels=weights_df['Asset'],
-                                       values=weights_df['Weight'],
+            fig = go.Figure(data=[go.Pie(labels=weights_df['Activo'],
+                                       values=weights_df['Peso'],
                                        textinfo='label+percent')])
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Please add more symbols in the sidebar to view portfolio composition")
         
         st.dataframe(weights_df.round(2))
-    
-    with tab2:
+        
         metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
         if metrics:
-            columns = ['Portfolio']
-            if 'SPY' in metrics:
-                columns.extend(['SPY', 'URTH'])
-                
-            metrics_data = {
-                'Metric': ['Sharpe Ratio', 'Sortino Ratio', 'Max Drawdown', 'VaR (95%)', 'CVaR (95%)']
-            }
+            st.subheader("Métricas de Rendimiento")
+            cols = st.columns(len(metrics))
             
-            for col in columns:
-                metrics_data[col] = [
-                    f"{metrics[col]['Sharpe']:.2f}",
-                    f"{metrics[col]['Sortino']:.2f}",
-                    f"{metrics[col]['Max Drawdown']:.2%}",
-                    f"{metrics[col]['VaR']:.2%}",
-                    f"{metrics[col]['CVaR']:.2%}"
-                ]
-            
-            metrics_df = pd.DataFrame(metrics_data)
-            st.dataframe(metrics_df)
+            for i, (name, metric) in enumerate(metrics.items()):
+                with cols[i]:
+                    st.metric(f"{name} Sharpe", f"{metric['Sharpe']:.2f}")
+                    st.metric(f"{name} Sortino", f"{metric['Sortino']:.2f}")
+                    st.metric(f"{name} Max Drawdown", f"{metric['Max Drawdown']:.2%}")
+                    st.metric(f"{name} VaR", f"{metric['VaR']:.2%}")
+                    st.metric(f"{name} CVaR", f"{metric['CVaR']:.2%}")
             
             fig = go.Figure()
-            for col in columns:
+            for name, metric in metrics.items():
                 fig.add_trace(go.Scatter(
-                    x=metrics[col]['Returns'].index,
-                    y=metrics[col]['Returns'],
-                    name=col
+                    x=metric['Returns'].index,
+                    y=metric['Returns'],
+                    name=name
                 ))
             
             fig.update_layout(
-                title="Performance Comparison",
-                xaxis_title="Date",
-                yaxis_title="Cumulative Return",
+                title="Comparación de Rendimiento",
+                xaxis_title="Fecha",
+                yaxis_title="Retorno Acumulado",
                 height=500,
                 yaxis_type='log' if use_log else 'linear'
             )
             st.plotly_chart(fig, use_container_width=True)
     
-    with tab3:
-        selected_symbol = st.selectbox("Select Asset", symbols)
+    with tab2:
+        selected_symbol = st.selectbox("Seleccionar Activo", symbols)
         technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
         
         fig = go.Figure()
@@ -306,7 +306,7 @@ if portfolio_data is not None and not portfolio_data.empty:
                 y=technical_data[f'{selected_symbol}_Close'],
                 name=selected_symbol
             ))
-            
+        
         for indicator in selected_indicators:
             if indicator in ['EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP']:
                 fig.add_trace(go.Scatter(
@@ -323,11 +323,11 @@ if portfolio_data is not None and not portfolio_data.empty:
                         name=f'BB {band}',
                         line=dict(dash='dot')
                     ))
-                    
+        
         fig.update_layout(
-            title=f"Technical Analysis - {selected_symbol}",
-            xaxis_title="Date",
-            yaxis_title="Price",
+            title=f"Análisis Técnico - {selected_symbol}",
+            xaxis_title="Fecha",
+            yaxis_title="Precio",
             height=600,
             yaxis_type='log' if use_log else 'linear'
         )
@@ -345,7 +345,7 @@ if portfolio_data is not None and not portfolio_data.empty:
                 
                 indicator_fig.update_layout(
                     title=f"{indicator} - {selected_symbol}",
-                    xaxis_title="Date",
+                    xaxis_title="Fecha",
                     yaxis_title=indicator,
                     height=300
                 )
@@ -355,30 +355,112 @@ if portfolio_data is not None and not portfolio_data.empty:
                     indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
                 
                 st.plotly_chart(indicator_fig, use_container_width=True)
-
-        # Panel de Trading
-        st.subheader("Trading Panel")
-        col1, col2 = st.columns(2)
+    
+    with tab3:
+        selected_symbol = st.selectbox("Seleccionar Activo para Trading", symbols)
+        stop_loss, take_profit, volatility = calculate_dynamic_levels(
+            portfolio_data, selected_symbol, confidence_level)
+        
+        col1, col2 = st.columns([2, 1])
         
         with col1:
-            operation = st.radio("Operation Type", ["Buy", "Sell"])
-            quantity = st.number_input("Quantity", min_value=1, value=1)
+            fig = go.Figure()
+            
+            if chart_type == 'Candlestick':
+                fig.add_trace(go.Candlestick(
+                    x=portfolio_data.index,
+                    open=portfolio_data[f'{selected_symbol}_Open'],
+                    high=portfolio_data[f'{selected_symbol}_High'],
+                    low=portfolio_data[f'{selected_symbol}_Low'],
+                    close=portfolio_data[f'{selected_symbol}_Close'],
+                    name=selected_symbol
+                ))
+            elif chart_type == 'OHLC':
+                fig.add_trace(go.Ohlc(
+                    x=portfolio_data.index,
+                    open=portfolio_data[f'{selected_symbol}_Open'],
+                    high=portfolio_data[f'{selected_symbol}_High'],
+                    low=portfolio_data[f'{selected_symbol}_Low'],
+                    close=portfolio_data[f'{selected_symbol}_Close'],
+                    name=selected_symbol
+                ))
+            else:
+                fig.add_trace(go.Scatter(
+                    x=portfolio_data.index,
+                    y=portfolio_data[f'{selected_symbol}_Close'],
+                    name=selected_symbol
+                ))
+            
+            current_price = portfolio_data[f'{selected_symbol}_Close'].iloc[-1]
+            
+            fig.add_hline(y=stop_loss, line_color="red", line_dash="dash",
+                         annotation_text="Stop Loss Dinámico")
+            fig.add_hline(y=take_profit, line_color="green", line_dash="dash",
+                         annotation_text="Take Profit Dinámico")
+            
+            fig.update_layout(
+                title=f"Trading View - {selected_symbol}",
+                xaxis_title="Fecha",
+                yaxis_title="Precio",
+                height=600,
+                yaxis_type='log' if use_log else 'linear'
+            )
+            st.plotly_chart(fig, use_container_width=True)
         
         with col2:
-            price = st.number_input(
-                "Price",
-                min_value=0.01,
-                value=float(technical_data[f'{selected_symbol}_Close'].iloc[-1]),
-                format="%.2f"
-            )
+            st.subheader("Panel de Trading")
             
-            total = price * quantity
-            st.write(f"Total operation value: ${total:,.2f}")
-        
-        if st.button("Execute Order"):
-            st.success(f"{operation} order executed: {quantity} {selected_symbol} at ${price:.2f}")
+            if info_dict.get(selected_symbol):
+                info = info_dict[selected_symbol]
+                st.write(f"**Nombre:** {info.get('longName', 'N/A')}")
+                st.write(f"**Sector:** {info.get('sector', 'N/A')}")
+                st.write(f"**Industria:** {info.get('industry', 'N/A')}")
+            
+            st.metric("Precio Actual", f"${current_price:.2f}")
+            st.metric("Volatilidad Condicional", f"{volatility:.2%}")
+            
+            operation = st.radio("Tipo de Operación", ["Comprar", "Vender"])
+            quantity = st.number_input("Cantidad", min_value=1, value=1)
+            
+            use_dynamic_levels = st.checkbox("Usar Niveles Dinámicos", value=True)
+            
+            if use_dynamic_levels:
+                sl_price = stop_loss
+                tp_price = take_profit
+            else:
+                sl_price = st.number_input("Stop Loss Manual", 
+                                         value=float(stop_loss),
+                                         step=0.01)
+                tp_price = st.number_input("Take Profit Manual", 
+                                         value=float(take_profit),
+                                         step=0.01)
+            
+            st.metric("Stop Loss", f"${sl_price:.2f}", 
+                     f"{(sl_price/current_price - 1):.2%}")
+            st.metric("Take Profit", f"${tp_price:.2f}", 
+                     f"{(tp_price/current_price - 1):.2%}")
+            
+            total = current_price * quantity
+            st.write(f"Total de la operación: ${total:,.2f}")
+            
+            if st.button("Ejecutar Orden"):
+                st.success(f"""
+                Orden ejecutada:
+                - {operation} {quantity} {selected_symbol} a ${current_price:.2f}
+                - Stop Loss: ${sl_price:.2f} ({(sl_price/current_price - 1):.2%})
+                - Take Profit: ${tp_price:.2f} ({(tp_price/current_price - 1):.2%})
+                - Total: ${total:,.2f}
+                """)
 
-# Mensaje en la barra lateral
-if __name__ == "__main__":
-    st.sidebar.markdown("---")
-    st.sidebar.info("Demo platform - Not for real trading")
+# Información adicional
+st.sidebar.markdown("---")
+st.sidebar.info("""
+Características:
+- Análisis de cartera con HRP
+- Indicadores técnicos avanzados
+- Stop Loss/Take Profit dinámicos usando VAR y HAR
+- Optimización de cartera
+- Múltiples tipos de gráficos
+- Escala logarítmica opcional
+""")
+st.sidebar.warning("Plataforma de demostración - No usar para trading real.")
