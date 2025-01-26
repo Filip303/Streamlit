@@ -1,3 +1,6 @@
+# ==================================================
+# Importaciones y Configuración Inicial
+# ==================================================
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -17,10 +20,14 @@ NEWS_API_KEY = "a00c1a624f854f3c9f48a167ed72eff1"
 FMP_API_KEY = "a8e2b58aed2cfb3c624c1962fb52e198"
 FRED_API_KEY = "8617ec24219966a9191eb6a9d9d9fd24"
 
-# Initialize FRED client
+# Inicialización del cliente FRED
 fred = fredapi.Fred(api_key=FRED_API_KEY)
 
-# News API Functions
+# ==================================================
+# Funciones de API
+# ==================================================
+
+# Función para obtener noticias por categoría
 def get_news_by_category(category, page_size=10):
     queries = {
         "financial": "financial OR market OR stock",
@@ -45,7 +52,7 @@ def get_news_by_category(category, page_size=10):
         st.error(f"Error en API de noticias: {e}")
         return []
 
-# FMP API Functions
+# Función para obtener datos fundamentales de un ticker
 def get_fundamental_data(ticker):
     base_url = "https://financialmodelingprep.com/api/v3"
     endpoints = {
@@ -73,7 +80,7 @@ def get_fundamental_data(ticker):
         st.error(f"Error en datos fundamentales: {e}")
         return None
 
-# FRED API Functions
+# Función para obtener datos de FRED
 def get_fred_data(series_id, start_date=None, end_date=None):
     try:
         data = fred.get_series(series_id, start_date, end_date)
@@ -82,6 +89,11 @@ def get_fred_data(series_id, start_date=None, end_date=None):
         st.error(f"Error en datos FRED: {e}")
         return None
 
+# ==================================================
+# Funciones de Análisis
+# ==================================================
+
+# Función para calcular la volatilidad HAR
 def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
     rv = returns ** 2
     rv_daily = rv.rolling(window=lags[0]).mean()
@@ -101,6 +113,7 @@ def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
     forecast = model.predict(X.iloc[-1:]).iloc[0]
     return np.sqrt(forecast) * scale_factor
 
+# Función para calcular la asignación de riesgo jerárquico (HRP)
 def hierarchical_risk_parity(returns):
     try:
         returns = returns.dropna(axis=1, how='all')
@@ -122,6 +135,7 @@ def hierarchical_risk_parity(returns):
         st.error(f"Error en cálculo HRP: {e}")
         return pd.Series({col: 1.0/len(returns.columns) for col in returns.columns})
 
+# Función para calcular indicadores técnicos
 def calculate_technical_indicators(df, symbol):
     if df is None or df.empty:
         return pd.DataFrame()
@@ -189,6 +203,7 @@ def calculate_technical_indicators(df, symbol):
     
     return df.fillna(method='ffill').fillna(method='bfill')
 
+# Función para calcular VaR y CVaR
 def calculate_var_cvar(returns, confidence_level=0.95):
     try:
         if isinstance(returns, pd.Series):
@@ -206,6 +221,7 @@ def calculate_var_cvar(returns, confidence_level=0.95):
         st.error(f"Error en cálculo VaR/CVaR: {e}")
         return 0, 0
 
+# Función para calcular métricas del portafolio
 def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
     try:
         metrics = {}
@@ -274,6 +290,7 @@ def calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate):
         st.error(f"Error en cálculo de métricas: {e}")
         return None
 
+# Función para calcular niveles dinámicos de stop loss y take profit
 def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplier=3):
     returns = pd.Series(np.log(data[f'{symbol}_Close']).diff().dropna())
     conditional_vol = calculate_har_volatility(returns)
@@ -286,7 +303,11 @@ def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplie
     
     return stop_loss, take_profit, conditional_vol
 
-# Benchmark data function
+# ==================================================
+# Funciones de Datos
+# ==================================================
+
+# Función para obtener datos de benchmarks
 def get_benchmark_data(period, interval):
     try:
         benchmarks = ['SPY', 'URTH']
@@ -301,7 +322,7 @@ def get_benchmark_data(period, interval):
         st.error(f"Error al obtener datos de benchmark: {e}")
         return None
 
-# Portfolio data function
+# Función para obtener datos del portafolio
 def get_portfolio_data(tickers, period, interval):
     portfolio_data = pd.DataFrame()
     info_dict = {}
@@ -316,6 +337,10 @@ def get_portfolio_data(tickers, period, interval):
         except Exception as e:
             st.warning(f"Error al obtener datos para {ticker}: {e}")
     return portfolio_data, info_dict
+
+# ==================================================
+# Interfaz de Usuario
+# ==================================================
 
 # Configuración de la página
 st.set_page_config(page_title="Trading Platform Pro V5+", layout="wide")
@@ -635,61 +660,62 @@ if portfolio_data is not None and not portfolio_data.empty:
                     st.write(f"[Leer más]({article['url']})")
 
     with tabs[3]:
-    st.header("📊 Análisis Fundamental")
-    
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        fundamental_ticker = st.text_input("Símbolo", "AAPL", key='fundamental_ticker')
-        if st.button("Analizar"):
-            fundamental_data = get_fundamental_data(fundamental_ticker)
-            
-            if fundamental_data:
-                profile = fundamental_data.get('profile', {})
-                metrics = fundamental_data.get('metrics', {})
-                ratios = fundamental_data.get('ratios', {})
-                financials = fundamental_data.get('financials', {})
-                balance = fundamental_data.get('balance', {})
+        st.header("📊 Análisis Fundamental")
+        
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            fundamental_ticker = st.text_input("Símbolo", "AAPL", key='fundamental_ticker')
+            if st.button("Analizar"):
+                fundamental_data = get_fundamental_data(fundamental_ticker)
                 
-                # Métricas principales
-                st.metric("Precio", f"${profile.get('price', 0):.2f}")
-                st.metric("Market Cap", f"${profile.get('mktCap', 0):,.0f}")
-                st.metric("Beta", f"{profile.get('beta', 0):.2f}")
-                
-                # Información general
-                st.subheader("Información General")
-                st.write(f"**Sector:** {profile.get('sector', 'N/A')}")
-                st.write(f"**Industria:** {profile.get('industry', 'N/A')}")
-                st.write(f"**CEO:** {profile.get('ceo', 'N/A')}")
-                
-                # Ratios financieros
-                st.subheader("Ratios Financieros")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("P/E", f"{ratios.get('peRatioTTM', 0):.2f}")
-                    st.metric("ROE", f"{ratios.get('returnOnEquityTTM', 0):.2%}")
-                with col2:
-                    st.metric("P/B", f"{ratios.get('priceToBookRatioTTM', 0):.2f}")
-                    st.metric("ROA", f"{ratios.get('returnOnAssetsTTM', 0):.2%}")
-                with col3:
-                    st.metric("D/E", f"{ratios.get('debtEquityRatioTTM', 0):.2f}")
-                    st.metric("Margen Neto", f"{ratios.get('netProfitMarginTTM', 0):.2%}")
-                
-                # Estados financieros
-                st.subheader("Estados Financieros (TTM)")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write("**Estado de Resultados**")
-                    st.write(f"- Ingresos: ${financials.get('revenue', 0):,.0f}")
-                    st.write(f"- EBITDA: ${financials.get('ebitda', 0):,.0f}")
-                    st.write(f"- Beneficio Neto: ${financials.get('netIncome', 0):,.0f}")
-                with col2:
-                    st.write("**Balance**")
-                    st.write(f"- Activos Totales: ${balance.get('totalAssets', 0):,.0f}")
-                    st.write(f"- Deuda Total: ${balance.get('totalDebt', 0):,.0f}")
-                    st.write(f"- Patrimonio: ${balance.get('totalEquity', 0):,.0f}")
-                
-                with st.expander("Descripción"):
-                    st.write(profile.get('description', 'No hay descripción disponible'))
+                if fundamental_data:
+                    profile = fundamental_data.get('profile', {})
+                    metrics = fundamental_data.get('metrics', {})
+                    ratios = fundamental_data.get('ratios', {})
+                    financials = fundamental_data.get('financials', {})
+                    balance = fundamental_data.get('balance', {})
+                    
+                    # Métricas principales
+                    st.metric("Precio", f"${profile.get('price', 0):.2f}")
+                    st.metric("Market Cap", f"${profile.get('mktCap', 0):,.0f}")
+                    st.metric("Beta", f"{profile.get('beta', 0):.2f}")
+                    
+                    # Información general
+                    st.subheader("Información General")
+                    st.write(f"**Sector:** {profile.get('sector', 'N/A')}")
+                    st.write(f"**Industria:** {profile.get('industry', 'N/A')}")
+                    st.write(f"**CEO:** {profile.get('ceo', 'N/A')}")
+                    
+                    # Ratios financieros
+                    st.subheader("Ratios Financieros")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("P/E", f"{ratios.get('peRatioTTM', 0):.2f}")
+                        st.metric("ROE", f"{ratios.get('returnOnEquityTTM', 0):.2%}")
+                    with col2:
+                        st.metric("P/B", f"{ratios.get('priceToBookRatioTTM', 0):.2f}")
+                        st.metric("ROA", f"{ratios.get('returnOnAssetsTTM', 0):.2%}")
+                    with col3:
+                        st.metric("D/E", f"{ratios.get('debtEquityRatioTTM', 0):.2f}")
+                        st.metric("Margen Neto", f"{ratios.get('netProfitMarginTTM', 0):.2%}")
+                    
+                    # Estados financieros
+                    st.subheader("Estados Financieros (TTM)")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write("**Estado de Resultados**")
+                        st.write(f"- Ingresos: ${financials.get('revenue', 0):,.0f}")
+                        st.write(f"- EBITDA: ${financials.get('ebitda', 0):,.0f}")
+                        st.write(f"- Beneficio Neto: ${financials.get('netIncome', 0):,.0f}")
+                    with col2:
+                        st.write("**Balance**")
+                        st.write(f"- Activos Totales: ${balance.get('totalAssets', 0):,.0f}")
+                        st.write(f"- Deuda Total: ${balance.get('totalDebt', 0):,.0f}")
+                        st.write(f"- Patrimonio: ${balance.get('totalEquity', 0):,.0f}")
+                    
+                    with st.expander("Descripción"):
+                        st.write(profile.get('description', 'No hay descripción disponible'))
+
     with tabs[4]:
         st.header("📈 Indicadores Macroeconómicos")
         
