@@ -449,12 +449,12 @@ def create_indicator_subplot(technical_data, selected_symbol, indicator):
     
     return fig
 
+# DESPUÉS: El código principal
 st.set_page_config(page_title="Trading Platform Pro V5", layout="wide")
 st.title("📈 Trading Platform Pro V5")
-
 st.warning("⚠️ Sitio en construcción - Solo para uso educativo!")
 
-# Initial configuration in tab1
+# Configuración inicial
 col1, col2, col3 = st.columns(3)
 with col1:
     symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
@@ -467,43 +467,18 @@ with col3:
     confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
     risk_free_rate = st.number_input("Tasa Libre de Riesgo Anual (%)", 0.0, 100.0, 2.0) / 100.0
 
-# Get data first
+# Obtener datos
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
-    # Calculate metrics
+    # Calcular métricas una sola vez
     close_cols = [col for col in portfolio_data.columns if col.endswith('_Close')]
     returns = portfolio_data[close_cols].pct_change().dropna()
     returns.columns = [col.replace('_Close', '') for col in returns.columns]
     weights = hierarchical_risk_parity(returns)
     metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
-    
-    # Create tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Análisis de Cartera", "Indicadores Técnicos", "Análisis Fundamental", "Análisis Macro", "Panel de Trading"])
 
-    with tab2:
-        available_indicators = [
-            'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
-            'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
-            'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
-            'ADX', 'CCI', 'DPO', 'TRIX',
-            'OBV', 'Force Index', 'EOM', 'Volume SMA'
-        ]
-        selected_symbol = st.selectbox("Seleccionar Activo", symbols)
-        selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators)
-        
-        if selected_symbol:
-            technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
-
-portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
-
-if portfolio_data is not None and not portfolio_data.empty:
-    close_cols = [col for col in portfolio_data.columns if col.endswith('_Close')]
-    returns = portfolio_data[close_cols].pct_change().dropna()
-    returns.columns = [col.replace('_Close', '') for col in returns.columns]
-    weights = hierarchical_risk_parity(returns)
-    metrics = calculate_portfolio_metrics(portfolio_data, weights, risk_free_rate)
-    
+    # Panel de métricas
     with st.expander("📊 Panel de Métricas", expanded=True):
         if metrics:
             metrics_df = pd.DataFrame(columns=['Métrica', 'Portfolio', 'SPY', 'URTH'])
@@ -521,7 +496,7 @@ if portfolio_data is not None and not portfolio_data.empty:
             
             st.dataframe(metrics_df, use_container_width=True, hide_index=True)
     
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Análisis de Cartera", "Análisis Técnico", "Análisis Fundamental", "Análisis Macro", "Panel de Trading"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Análisis de Cartera", "Indicadores Técnicos", "Análisis Fundamental", "Análisis Macro", "Panel de Trading"])
     
     with tab1:
         st.subheader("Composición de la Cartera (HRP)")
@@ -553,7 +528,7 @@ if portfolio_data is not None and not portfolio_data.empty:
         st.plotly_chart(fig, use_container_width=True)
     
     with tab2:
-        selected_symbol = st.selectbox("Seleccionar Activo", symbols)
+        selected_symbol = st.selectbox("Seleccionar Activo", symbols, key="technical_select")
         technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
         
         fig = go.Figure()
