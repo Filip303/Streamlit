@@ -400,25 +400,32 @@ def create_indicator_subplot(technical_data, selected_symbol, indicator):
 st.set_page_config(page_title="Trading Platform Pro V5", layout="wide")
 st.title("📈 Trading Platform Pro V5")
 
-with st.sidebar:
-    st.header("Configuración")
-    symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
-    symbols = [s.strip() for s in symbols_input.split(",")]
-    
-    period = st.selectbox("Período", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=2)
-    interval = st.selectbox("Intervalo", ["1d", "5d", "1wk", "1mo"], index=0)
-    chart_type = st.selectbox("Tipo de Gráfico", ['Candlestick', 'OHLC', 'Line'])
-    confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
-    risk_free_rate = st.number_input("Tasa Libre de Riesgo Anual (%)", 0.0, 100.0, 2.0) / 100.0
-    
-    available_indicators = [
-        'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
-        'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
-        'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
-        'ADX', 'CCI', 'DPO', 'TRIX',
-        'OBV', 'Force Index', 'EOM', 'Volume SMA'
-    ]
-    selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators)
+st.warning("⚠️ Sitio en construcción - Solo para uso educativo!")
+
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Análisis de Cartera", "Indicadores Técnicos", "Análisis Fundamental", "Análisis Macro", "Panel de Trading"])
+
+with tab1:
+   col1, col2, col3 = st.columns(3)
+   with col1:
+       symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
+       symbols = [s.strip() for s in symbols_input.split(",")]
+       period = st.selectbox("Período", ["1mo", "3mo", "6mo", "1y", "2y", "5y"])
+   with col2:
+       interval = st.selectbox("Intervalo", ["1d", "5d", "1wk", "1mo"])
+       chart_type = st.selectbox("Tipo de Gráfico", ['Candlestick', 'OHLC', 'Line'])
+   with col3:
+       confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
+       risk_free_rate = st.number_input("Tasa Libre de Riesgo Anual (%)", 0.0, 100.0, 2.0) / 100.0
+
+with tab2:
+   available_indicators = [
+       'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
+       'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
+       'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
+       'ADX', 'CCI', 'DPO', 'TRIX',
+       'OBV', 'Force Index', 'EOM', 'Volume SMA'
+   ]
+   selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators)
 
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
