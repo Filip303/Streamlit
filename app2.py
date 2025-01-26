@@ -368,34 +368,34 @@ Esta es una versión demo - No usar para trading real.
 tabs = st.tabs(["Trading", "Análisis Técnico", "Noticias", "Fundamental", "Macro"])
 
 with tabs[0]:
-   st.header("Panel de Trading")
+    st.header("Panel de Trading")
 
-# Sidebar configuration
-# Configuración de trading
-   col1, col2, col3 = st.columns(3)
-   with col1:
-       symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
-       period = st.selectbox("Período", ["1mo", "3mo", "6mo", "1y", "2y", "5y"])
-   with col2:
-       interval = st.selectbox("Intervalo", ["1d", "5d", "1wk", "1mo"])
-       chart_type = st.selectbox("Tipo de Gráfico", ['Candlestick', 'OHLC', 'Line'])
-   with col3:
-       confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95)
-       risk_free_rate = st.number_input("Tasa Libre de Riesgo (%)", 0.0, 100.0, 2.0)
-   
-     # Configuración de análisis técnico
-   col1, col2 = st.columns(2)
-   with col1:
-       selected_symbol = st.selectbox("Activo", symbols)
-       use_log = st.checkbox("Escala Logarítmica")
-   with col2:
-       available_indicators = [
-           'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
-           'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
-           'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
-           'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index'
-       ]
-       selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators)
+    # Sidebar configuration
+    # Configuración de trading
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
+        period = st.selectbox("Período", ["1mo", "3mo", "6mo", "1y", "2y", "5y"])
+    with col2:
+        interval = st.selectbox("Intervalo", ["1d", "5d", "1wk", "1mo"])
+        chart_type = st.selectbox("Tipo de Gráfico", ['Candlestick', 'OHLC', 'Line'])
+    with col3:
+        confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95)
+        risk_free_rate = st.number_input("Tasa Libre de Riesgo (%)", 0.0, 100.0, 2.0)
+
+    # Configuración de análisis técnico
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_symbol = st.selectbox("Activo", symbols)
+        use_log = st.checkbox("Escala Logarítmica")
+    with col2:
+        available_indicators = [
+            'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
+            'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
+            'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
+            'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index'
+        ]
+        selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators)
 
 # Obtener datos
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
@@ -412,13 +412,13 @@ if portfolio_data is not None and not portfolio_data.empty:
 
     with tabs[0]:
         st.header("Panel de Trading")
-        
+
         # Panel de Métricas
         with st.expander("📊 Panel de Métricas", expanded=True):
             if metrics:
                 metrics_df = pd.DataFrame(columns=['Métrica', 'Portfolio', 'SPY', 'URTH'])
                 metrics_df['Métrica'] = ['Sharpe Ratio', 'Sortino Ratio', 'Max Drawdown', 'VaR', 'CVaR']
-               
+
                 for name in ['Portfolio', 'SPY', 'URTH']:
                     if name in metrics:
                         metrics_df[name] = [
@@ -428,23 +428,23 @@ if portfolio_data is not None and not portfolio_data.empty:
                             f"{metrics[name]['VaR']:.2%}",
                             f"{metrics[name]['CVaR']:.2%}"
                         ]
-               
+
                 st.dataframe(metrics_df, use_container_width=True, hide_index=True)
-        
+
         selected_symbol = st.selectbox("Seleccionar Activo para Trading", symbols)
-        risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", 
+        risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit",
                                   min_value=2.0, max_value=5.0, value=3.0, step=0.1)
-        
+
         stop_loss, take_profit, volatility = calculate_dynamic_levels(
             portfolio_data, selected_symbol, confidence_level, risk_multiplier)
-        
+
         current_price = portfolio_data[f'{selected_symbol}_Close'].iloc[-1]
-        
+
         col1, col2 = st.columns([7, 3])
-        
+
         with col1:
             fig = go.Figure()
-           
+
             if chart_type == 'Candlestick':
                 fig.add_trace(go.Candlestick(
                     x=portfolio_data.index,
@@ -478,7 +478,7 @@ if portfolio_data is not None and not portfolio_data.empty:
                 line=dict(color='green', dash='dash'),
                 showlegend=True
             ))
-           
+
             fig.update_layout(
                 title=f"Trading View - {selected_symbol}",
                 xaxis_title="Fecha",
@@ -486,36 +486,36 @@ if portfolio_data is not None and not portfolio_data.empty:
                 height=600,
                 yaxis_type='log' if use_log else 'linear'
             )
-           
+
             st.plotly_chart(fig, use_container_width=True)
-        
+
         with col2:
             if info_dict.get(selected_symbol):
                 info = info_dict[selected_symbol]
                 st.write(f"**Nombre:** {info.get('longName', 'N/A')}")
                 st.write(f"**Sector:** {info.get('sector', 'N/A')}")
                 st.write(f"**Industria:** {info.get('industry', 'N/A')}")
-           
+
             st.metric("Precio Actual", f"${current_price:.2f}")
             st.metric("Volatilidad", f"{volatility:.2%}")
-            st.metric("Stop Loss", f"${stop_loss:.2f}", 
+            st.metric("Stop Loss", f"${stop_loss:.2f}",
                      f"{(stop_loss/current_price - 1):.2%}")
-            st.metric("Take Profit", f"${take_profit:.2f}", 
+            st.metric("Take Profit", f"${take_profit:.2f}",
                      f"{(take_profit/current_price - 1):.2%}")
-           
+
             risk_amount = current_price - stop_loss
             reward_amount = take_profit - current_price
             risk_reward_ratio = reward_amount / risk_amount if risk_amount != 0 else float('inf')
-           
+
             st.metric("Ratio Riesgo/Beneficio", f"{risk_reward_ratio:.2f}")
-           
+
             quantity = st.number_input("Cantidad", min_value=1, value=1)
             total = current_price * quantity
             st.write(f"Total de la operación: ${total:,.2f}")
-           
+
             risk_total = (current_price - stop_loss) * quantity
             reward_total = (take_profit - current_price) * quantity
-           
+
             st.write(f"Riesgo máximo: ${risk_total:.2f}")
             st.write(f"Beneficio objetivo: ${reward_total:.2f}")
 
@@ -523,9 +523,9 @@ if portfolio_data is not None and not portfolio_data.empty:
         st.header("Análisis Técnico")
         selected_symbol = st.selectbox("Seleccionar Activo", symbols, key='technical_symbol')
         technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
-        
+
         fig = go.Figure()
-        
+
         if chart_type == 'Candlestick':
             fig.add_trace(go.Candlestick(
                 x=technical_data.index,
@@ -550,7 +550,7 @@ if portfolio_data is not None and not portfolio_data.empty:
                 y=technical_data[f'{selected_symbol}_Close'],
                 name=selected_symbol
             ))
-        
+
         for indicator in selected_indicators:
             if indicator in ['EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP']:
                 fig.add_trace(go.Scatter(
@@ -608,7 +608,7 @@ if portfolio_data is not None and not portfolio_data.empty:
                     name='Chikou Span',
                     line=dict(color='purple')
                 ))
-        
+
         fig.update_layout(
             title=f"Análisis Técnico - {selected_symbol}",
             xaxis_title="Fecha",
@@ -617,12 +617,12 @@ if portfolio_data is not None and not portfolio_data.empty:
             yaxis_type='log' if use_log else 'linear'
         )
         st.plotly_chart(fig, use_container_width=True)
-        
+
         # Gráficos separados para indicadores
         for indicator in selected_indicators:
             if indicator in ['RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI', 'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index', 'EOM']:
                 indicator_fig = go.Figure()
-                
+
                 if indicator == 'MACD':
                     indicator_fig.add_trace(go.Scatter(
                         x=technical_data.index,
@@ -646,174 +646,155 @@ if portfolio_data is not None and not portfolio_data.empty:
                         y=y_data,
                         name=indicator
                     ))
-                
+
                 indicator_fig.update_layout(
                     title=f"{indicator} - {selected_symbol}",
                     xaxis_title="Fecha",
                     yaxis_title=indicator,
                     height=300
                 )
-                
+
                 if indicator in ['RSI', 'Stoch RSI', 'MFI']:
                     indicator_fig.add_hline(y=70, line_dash="dash", line_color="red")
                     indicator_fig.add_hline(y=30, line_dash="dash", line_color="green")
-                
+
                 st.plotly_chart(indicator_fig, use_container_width=True)
 
     with tabs[2]:
-   st.header("📰 Centro de Noticias")
-   news_categories = {
-       "financial": "Financieras",
-       "macro": "Macroeconómicas",
-       "political": "Políticas",
-       "corporate": "Empresariales",
-       "commodities": "Commodities"
-   }
-   
-   col1, col2 = st.columns([1, 3])
-   with col1:
-       selected_category = st.selectbox(
-           "Categoría",
-           options=list(news_categories.keys()),
-           format_func=lambda x: news_categories[x]
-       )
-       news_count = st.slider("Número de noticias", 5, 20, 10)
-   
-   with col2:
-       news_articles = get_news_by_category(selected_category, news_count)
-       for article in news_articles:
-           with st.expander(article["title"]):
-               st.write(f"**Fuente:** {article['source']['name']}")
-               st.write(f"**Fecha:** {article['publishedAt'][:10]}")
-               st.write(f"**Descripción:** {article['description']}")
-               st.write(f"[Leer más]({article['url']})")
+        st.header("📰 Centro de Noticias")
+        news_categories = {
+            "financial": "Financieras",
+            "macro": "Macroeconómicas",
+            "political": "Políticas",
+            "corporate": "Empresariales",
+            "commodities": "Commodities"
+        }
+
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            selected_category = st.selectbox(
+                "Categoría",
+                options=list(news_categories.keys()),
+                format_func=lambda x: news_categories[x]
+            )
+            news_count = st.slider("Número de noticias", 5, 20, 10)
+
+        with col2:
+            news_articles = get_news_by_category(selected_category, news_count)
+            for article in news_articles:
+                with st.expander(article["title"]):
+                    st.write(f"**Fuente:** {article['source']['name']}")
+                    st.write(f"**Fecha:** {article['publishedAt'][:10]}")
+                    st.write(f"**Descripción:** {article['description']}")
+                    st.write(f"[Leer más]({article['url']})")
 
     with tabs[3]:
-   st.header("📊 Análisis Fundamental")
-   
-   col1, col2 = st.columns([1, 2])
-   with col1:
-       fundamental_ticker = st.text_input("Símbolo", "AAPL")
-       if st.button("Analizar"):
-           fundamental_data = get_fundamental_data(fundamental_ticker)
-           
-           if fundamental_data and 'overview' in fundamental_data:
-               overview = fundamental_data['overview']
-               income = fundamental_data.get('income', {}).get('annualReports', [{}])[0]
-               balance = fundamental_data.get('balance', {}).get('annualReports', [{}])[0]
-               
-               # Métricas principales
-               st.metric("Precio", f"${overview.get('Price', 'N/A')}")
-               st.metric("Market Cap", f"${overview.get('MarketCapitalization', 'N/A')}")
-               st.metric("Beta", overview.get('Beta', 'N/A'))
-               
-               # Ratios
-               st.subheader("Ratios")
-               col1, col2, col3 = st.columns(3)
-               with col1:
-                   st.metric("P/E", overview.get('PERatio', 'N/A'))
-                   st.metric("ROE", overview.get('ReturnOnEquityTTM', 'N/A'))
-               with col2:
-                   st.metric("P/B", overview.get('PriceToBookRatio', 'N/A'))
-                   st.metric("Margen Op.", overview.get('OperatingMarginTTM', 'N/A'))
-               with col3:
-                   st.metric("Dividend Yield", overview.get('DividendYield', 'N/A'))
-                   st.metric("Payout Ratio", overview.get('PayoutRatio', 'N/A'))
-               
-               # Información financiera
-               st.subheader("Información Financiera")
-               col1, col2 = st.columns(2)
-               with col1:
-                   st.write("**Estado de Resultados**")
-                   st.write(f"- Ingresos: ${income.get('totalRevenue', 'N/A')}")
-                   st.write(f"- EBITDA: ${income.get('ebitda', 'N/A')}")
-                   st.write(f"- Beneficio Neto: ${income.get('netIncome', 'N/A')}")
-               with col2:
-                   st.write("**Balance**")
-                   st.write(f"- Activos: ${balance.get('totalAssets', 'N/A')}")
-                   st.write(f"- Deuda: ${balance.get('totalLiabilities', 'N/A')}")
-                   st.write(f"- Patrimonio: ${balance.get('totalShareholderEquity', 'N/A')}")
-               
-               with st.expander("Descripción"):
-                   st.write(overview.get('Description', 'No hay descripción disponible'))
+        st.header("📊 Análisis Fundamental")
 
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            fundamental_ticker = st.text_input("Símbolo", "AAPL")
+            if st.button("Analizar"):
+                fundamental_data = get_fundamental_data(fundamental_ticker)
+
+                if fundamental_data and 'overview' in fundamental_data:
+                    overview = fundamental_data['overview']
+                    income = fundamental_data.get('income', {}).get('annualReports', [{}])[0]
+                    balance = fundamental_data.get('balance', {}).get('annualReports', [{}])[0]
+
+                    # Métricas principales
+                    st.metric("Precio", f"${overview.get('Price', 'N/A')}")
+                    st.metric("Market Cap", f"${overview.get('MarketCapitalization', 'N/A')}")
+                    st.metric("Beta", overview.get('Beta', 'N/A'))
+
+                    # Ratios
+                    st.subheader("Ratios")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("P/E", overview.get('PERatio', 'N/A'))
+                        st.metric("ROE", overview.get('ReturnOnEquityTTM', 'N/A'))
+                    with col2:
+                        st.metric("P/B", overview.get('PriceToBookRatio', 'N/A'))
+                        st.metric("Margen Op.", overview.get('OperatingMarginTTM', 'N/A'))
+                    with col3:
+                        st.metric("Dividend Yield", overview.get('DividendYield', 'N/A'))
+                        st.metric("Payout Ratio", overview.get('PayoutRatio', 'N/A'))
+
+                                        # Información financiera
+                    st.subheader("Información Financiera")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write("**Ingresos Totales:**")
+                        st.write(f"${income.get('totalRevenue', 'N/A')}")
+                        st.write("**Beneficio Bruto:**")
+                        st.write(f"${income.get('grossProfit', 'N/A')}")
+                        st.write("**Beneficio Neto:**")
+                        st.write(f"${income.get('netIncome', 'N/A')}")
+                    with col2:
+                        st.write("**Activos Totales:**")
+                        st.write(f"${balance.get('totalAssets', 'N/A')}")
+                        st.write("**Pasivos Totales:**")
+                        st.write(f"${balance.get('totalLiabilities', 'N/A')}")
+                        st.write("**Patrimonio Neto:**")
+                        st.write(f"${balance.get('totalShareholderEquity', 'N/A')}")
+
+                    # Gráfico de ingresos y beneficios
+                    st.subheader("Tendencias Financieras")
+                    financial_trends = get_financial_trends(fundamental_ticker)
+                    if financial_trends:
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=financial_trends['dates'],
+                            y=financial_trends['revenues'],
+                            name='Ingresos',
+                            mode='lines+markers'
+                        ))
+                        fig.add_trace(go.Scatter(
+                            x=financial_trends['dates'],
+                            y=financial_trends['net_income'],
+                            name='Beneficio Neto',
+                            mode='lines+markers'
+                        ))
+                        fig.update_layout(
+                            title="Ingresos vs Beneficio Neto",
+                            xaxis_title="Fecha",
+                            yaxis_title="Monto (USD)",
+                            height=400
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
 
     with tabs[4]:
-   st.header("📈 Indicadores Macroeconómicos")
-   
-   fred_indicators = {
-       "GDP": "PIB",
-       "UNRATE": "Desempleo",
-       "CPIAUCSL": "IPC",
-       "FEDFUNDS": "Tasa FED",
-       "DGS10": "Treasury 10Y",
-       "M2": "M2",
-       "INDPRO": "Producción Industrial",
-       "HOUST": "Construcción",
-       "PCE": "Consumo Personal",
-       "PAYEMS": "Nóminas no agrícolas"
-   }
-   
-   col1, col2 = st.columns([1, 3])
-   with col1:
-       selected_indicator = st.selectbox(
-           "Indicador",
-           options=list(fred_indicators.keys()),
-           format_func=lambda x: fred_indicators[x]
-       )
-       
-       date_range = st.selectbox(
-           "Período",
-           options=["1Y", "2Y", "5Y", "10Y", "MAX"],
-           index=0
-       )
-       
-       end_date = datetime.now()
-       start_date = end_date - pd.DateOffset(
-           years={"1Y": 1, "2Y": 2, "5Y": 5, "10Y": 10, "MAX": 50}[date_range]
-       )
-   
-   with col2:
-       fred_data = get_fred_data(selected_indicator, start_date, end_date)
-       if fred_data is not None and not fred_data.empty:
-           fig = go.Figure()
-           fig.add_trace(go.Scatter(
-               x=fred_data.index,
-               y=fred_data['value'],
-               mode='lines',
-               name=fred_indicators[selected_indicator]
-           ))
-           
-           fig.update_layout(
-               title=f"{fred_indicators[selected_indicator]} ({selected_indicator})",
-               xaxis_title="Fecha",
-               yaxis_title="Valor",
-               height=500
-           )
-           
-           st.plotly_chart(fig, use_container_width=True)
-           
-           # Métricas
-           col1, col2, col3, col4 = st.columns(4)
-           with col1:
-               st.metric("Último", f"{fred_data['value'].iloc[-1]:.2f}")
-           with col2:
-               st.metric("Promedio", f"{fred_data['value'].mean():.2f}")
-           with col3:
-               st.metric("Máximo", f"{fred_data['value'].max():.2f}")
-           with col4:
-               st.metric("Mínimo", f"{fred_data['value'].min():.2f}")
+        st.header("🌍 Análisis Macro")
 
-# Información adicional
-st.sidebar.markdown("---")
-st.sidebar.info("""
-Características V5+:
-- Trading avanzado con HRP
-- Análisis técnico completo
-- Centro de noticias financieras
-- Análisis fundamental
-- Indicadores macroeconómicos
-- Stop Loss/Take Profit dinámicos
-- Múltiples tipos de gráficos
-""")
-st.sidebar.warning("Plataforma de demostración - No usar para trading real.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            macro_indicator = st.selectbox(
+                "Indicador Macro",
+                options=["GDP", "Inflation", "Unemployment", "Interest Rates"]
+            )
+            country = st.selectbox(
+                "País",
+                options=["USA", "China", "Germany", "Japan", "UK"]
+            )
+            start_date = st.date_input("Fecha de Inicio", value=pd.to_datetime("2020-01-01"))
+            end_date = st.date_input("Fecha de Fin", value=pd.to_datetime("2023-01-01"))
+
+        with col2:
+            macro_data = get_macro_data(macro_indicator, country, start_date, end_date)
+            if macro_data is not None:
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=macro_data['dates'],
+                    y=macro_data['values'],
+                    name=macro_indicator,
+                    mode='lines+markers'
+                ))
+                fig.update_layout(
+                    title=f"{macro_indicator} en {country}",
+                    xaxis_title="Fecha",
+                    yaxis_title=macro_indicator,
+                    height=400
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("No se encontraron datos para el indicador seleccionado.")
