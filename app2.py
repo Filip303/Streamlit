@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
-from arch import arch_model
 from scipy.stats import norm
 import statsmodels.api as sm
 import ta
