@@ -53,7 +53,6 @@ def get_news_by_category(category, page_size=10):
        return []
 
 # Función para obtener datos fundamentales de un ticker
-# Funciones auxiliares
 def get_fundamental_data(ticker):
    url = f"https://www.alphavantage.co/query"
    endpoints = {
