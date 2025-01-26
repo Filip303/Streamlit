@@ -496,13 +496,32 @@ if portfolio_data is not None and not portfolio_data.empty:
     
     # Panel de Trading
     with st.expander("💹 Panel de Trading", expanded=True):
-        selected_symbol = st.selectbox("Seleccionar Activo para Trading", symbols, key='trading_symbol')
+        trading_symbol_input = st.text_input("Símbolo para Trading", "AAPL", key='trading_symbol_input')
+        selected_symbol = trading_symbol_input.strip()
+        
+        try:
+            # Verificar si el símbolo existe
+            stock = yf.Ticker(selected_symbol)
+            info = stock.info
+            if not info:
+                st.error(f"Símbolo {selected_symbol} no encontrado")
+                return
+        except Exception as e:
+            st.error(f"Error al verificar símbolo: {e}")
+            return
         risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", min_value=2.0, max_value=5.0, value=3.0, step=0.1)
         
         stop_loss, take_profit, volatility = calculate_dynamic_levels(
             portfolio_data, selected_symbol, confidence_level, risk_multiplier)
         
-        current_price = portfolio_data[f'{selected_symbol}_Close'].iloc[-1]
+        # Obtener datos específicos para trading
+        trading_data = yf.Ticker(selected_symbol).history(period=period, interval=interval)
+        if trading_data.empty:
+            st.error("No se pudieron obtener datos para el símbolo seleccionado")
+            return
+            
+        current_price = trading_data['Close'].iloc[-1]
+        trading_data = trading_data.rename(columns={col: f"{selected_symbol}_{col}" for col in trading_data.columns})
         
         col1, col2 = st.columns([7, 3])
         
