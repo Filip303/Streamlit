@@ -78,9 +78,9 @@ def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplie
         
         return stop_loss, take_profit, conditional_vol
     except Exception as e:
-        st.warning(f"Error calculating dynamic levels: {e}")
+        st.warning(f"Dynamic levels calculation error: {e}")
         return 0, 0, 0
-
+        
 def get_portfolio_data(tickers, period, interval):
    portfolio_data = pd.DataFrame()
    info_dict = {}
@@ -129,13 +129,14 @@ def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
         rv_weekly = rv.rolling(window=lags[1], min_periods=1).mean()
         rv_monthly = rv.rolling(window=lags[2], min_periods=1).mean()
         
-        weights = [0.5, 0.3, 0.2]
+        weights = [0.5, 0.3, 0.2]  
         forecast = (rv_daily.iloc[-1] * weights[0] + 
                    rv_weekly.iloc[-1] * weights[1] + 
                    rv_monthly.iloc[-1] * weights[2])
                    
         return np.sqrt(forecast) * scale_factor
     except Exception as e:
+        st.warning(f"HAR volatility calculation error: {e}")
         return returns.std() * scale_factor
 
 def calculate_ichimoku(df, symbol):
