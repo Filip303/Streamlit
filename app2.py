@@ -515,7 +515,16 @@ def create_indicator_subplot(technical_data, selected_symbol, indicator):
     
     return fig
 
+# Configuración de la página
 st.set_page_config(page_title="Trading Platform Pro V5", layout="wide")
+
+# Inyectar Google AdSense
+st.markdown("""
+    <head>
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5806669438259617" crossorigin="anonymous"></script>
+    </head>
+""", unsafe_allow_html=True)
+
 st.title("📈 Trading Platform Pro V5")
 st.warning("⚠️ Sitio en construcción - Solo para uso educativo!")
 
