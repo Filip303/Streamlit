@@ -656,80 +656,95 @@ if portfolio_data is not None and not portfolio_data.empty:
 
     with tab5:
         st.subheader("💹 Panel de Trading")
-trading_symbol_input = st.text_input("Símbolo para Trading", "AAPL", key='trading_symbol_input')
-selected_symbol = trading_symbol_input.strip()
+        trading_symbol_input = st.text_input("Símbolo para Trading", "AAPL", key='trading_symbol_input')
+        selected_symbol = trading_symbol_input.strip()
 
-try:
-    stock = yf.Ticker(selected_symbol)
-    info = stock.info
-    if not info:
-        st.error(f"Símbolo {selected_symbol} no encontrado")
-        st.stop()
-except Exception as e:
-    st.error(f"Error al verificar símbolo: {e}")
-    st.stop()
+        try:
+            stock = yf.Ticker(selected_symbol)
+            info = stock.info
+            if not info:
+                st.error(f"Símbolo {selected_symbol} no encontrado")
+                st.stop()
+        except Exception as e:
+            st.error(f"Error al verificar símbolo: {e}")
+            st.stop()
 
-risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", 
-                            min_value=2.0, max_value=5.0, value=3.0, step=0.1)
+        risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", 
+                                min_value=2.0, max_value=5.0, value=3.0, step=0.1)
 
-trading_data = stock.history(period=period, interval=interval)
+        trading_data = stock.history(period=period, interval=interval)
 
-if trading_data is not None and not trading_data.empty:
-    trading_data = trading_data.rename(columns={col: f"{selected_symbol}_{col}" for col in trading_data.columns})
-    trading_data = trading_data.replace([np.inf, -np.inf], np.nan).dropna()
-    
-    if len(trading_data) >= 2:
-        stop_loss, take_profit, volatility = calculate_dynamic_levels(
-            trading_data, selected_symbol, confidence_level, risk_multiplier)
-    else:
-        stop_loss, take_profit, volatility = 0, 0, 0
-else:
-    stop_loss, take_profit, volatility = 0, 0, 0
+        if trading_data is not None and not trading_data.empty:
+            trading_data = trading_data.rename(columns={col: f"{selected_symbol}_{col}" for col in trading_data.columns})
+            trading_data = trading_data.replace([np.inf, -np.inf], np.nan).dropna()
+            
+            if len(trading_data) >= 2:
+                stop_loss, take_profit, volatility = calculate_dynamic_levels(
+                    trading_data, selected_symbol, confidence_level, risk_multiplier)
+            else:
+                stop_loss, take_profit, volatility = 0, 0, 0
+        else:
+            stop_loss, take_profit, volatility = 0, 0, 0
 
-with col1:
-    fig = go.Figure()
-    
-    if chart_type == 'Candlestick':
-        fig.add_trace(go.Candlestick(
-            x=trading_data.index,
-            open=trading_data[f'{selected_symbol}_Open'],
-            high=trading_data[f'{selected_symbol}_High'],
-            low=trading_data[f'{selected_symbol}_Low'],
-            close=trading_data[f'{selected_symbol}_Close'],
-            name=selected_symbol
-        ))
-    else:
-        fig.add_trace(go.Scatter(
-            x=trading_data.index,
-            y=trading_data[f'{selected_symbol}_Close'],
-            name=selected_symbol
-        ))
+        col1, col2 = st.columns([7, 3])
 
-    fig.add_trace(go.Scatter(
-        x=trading_data.index,
-        y=[stop_loss] * len(trading_data.index),
-        mode='lines',
-        name='Stop Loss',
-        line=dict(color='red', dash='dash'),
-        showlegend=True
-    ))
+        with col1:
+            fig = go.Figure()
+            
+            if chart_type == 'Candlestick':
+                fig.add_trace(go.Candlestick(
+                    x=trading_data.index,
+                    open=trading_data[f'{selected_symbol}_Open'],
+                    high=trading_data[f'{selected_symbol}_High'],
+                    low=trading_data[f'{selected_symbol}_Low'],
+                    close=trading_data[f'{selected_symbol}_Close'],
+                    name=selected_symbol
+                ))
+            else:
+                fig.add_trace(go.Scatter(
+                    x=trading_data.index,
+                    y=trading_data[f'{selected_symbol}_Close'],
+                    name=selected_symbol
+                ))
 
-    fig.add_trace(go.Scatter(
-        x=trading_data.index,
-        y=[take_profit] * len(trading_data.index),
-        mode='lines',
-        name='Take Profit',
-        line=dict(color='green', dash='dash'),
-        showlegend=True
-    ))
-    
-    fig.update_layout(
-        title=f"Trading View - {selected_symbol}",
-        xaxis_title="Fecha",
-        yaxis_title="Precio",
-        height=600,
-        yaxis_type='log'
-    )
+            fig.add_trace(go.Scatter(
+                x=trading_data.index,
+                y=[stop_loss] * len(trading_data.index),
+                mode='lines',
+                name='Stop Loss',
+                line=dict(color='red', dash='dash'),
+                showlegend=True
+            ))
+
+            fig.add_trace(go.Scatter(
+                x=trading_data.index,
+                y=[take_profit] * len(trading_data.index),
+                mode='lines',
+                name='Take Profit',
+                line=dict(color='green', dash='dash'),
+                showlegend=True
+            ))
+            
+            fig.update_layout(
+                title=f"Trading View - {selected_symbol}",
+                xaxis_title="Fecha",
+                yaxis_title="Precio",
+                height=600,
+                yaxis_type='log'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            if info:
+                st.write(f"**Nombre:** {info.get('longName', 'N/A')}")
+                st.write(f"**Sector:** {info.get('sector', 'N/A')}")
+                st.write(f"**Industria:** {info.get('industry', 'N/A')}")
+                
+            current_price = trading_data[f'{selected_symbol}_Close'].iloc[-1]
+            st.metric("Precio Actual", f"${current_price:.2f}")
+            st.metric("Volatilidad", f"{volatility:.2%}")
+            st.metric("Stop Loss", f"${stop_loss:.2f}", f"{(stop_loss/current_price - 1):.2%}")
+            st.metric("Take Profit", f"${take_profit:.2f}", f"{(take_profit/current_price - 1):.2%}")
     
     st.plotly_chart(fig, use_container_width=True)
 st.sidebar.markdown("---")
