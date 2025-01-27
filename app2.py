@@ -605,36 +605,13 @@ if portfolio_data is not None and not portfolio_data.empty:
             start_date = st.date_input("Fecha Inicio", value=pd.to_datetime("2020-01-01"))
             end_date = st.date_input("Fecha Fin", value=pd.to_datetime("2023-12-31"))
             if st.button("Obtener Datos"):
-   series_id = FRED_INDICATORS[selected_indicator] if not custom_series else custom_series
-   fred_data = get_fred_data(series_id, start_date, end_date)
-   
-   if fred_data is not None:
-       fig = go.Figure()
-       fig.add_trace(go.Scatter(
-           x=fred_data.index,
-           y=fred_data['value'],
-           mode='lines',
-           name=selected_indicator if not custom_series else custom_series
-       ))
-       
-       # Actualizar layout con formato de fecha y escala adecuada
-       fig.update_layout(
-           title=f"Datos de {selected_indicator if not custom_series else custom_series}",
-           xaxis_title="Fecha",
-           yaxis_title="Valor",
-           height=500,
-           xaxis=dict(
-               rangeselector=dict(
-                   buttons=list([
-                       dict(count=6, label="6m", step="month", stepmode="backward"),
-                       dict(count=1, label="1y", step="year", stepmode="backward"),
-                       dict(count=2, label="2y", step="year", stepmode="backward"),
-                       dict(step="all")
-                   ])
-               ),
-               rangeslider=dict(visible=True)
-           )
-       )
+                series_id = FRED_INDICATORS[selected_indicator] if not custom_series else custom_series
+                fred_data = get_fred_data(series_id, start_date, end_date)
+                if fred_data is not None:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=fred_data.index, y=fred_data['value'], mode='lines', name=selected_indicator if not custom_series else custom_series))
+                    fig.update_layout(title=f"Datos de {selected_indicator if not custom_series else custom_series}", xaxis_title="Fecha", yaxis_title="Valor", height=500, xaxis=dict(rangeselector=dict(buttons=list([dict(count=6, label="6m", step="month", stepmode="backward"), dict(count=1, label="1y", step="year", stepmode="backward"), dict(count=2, label="2y", step="year", stepmode="backward"), dict(step="all")])), rangeslider=dict(visible=True)))
+                    st.plotly_chart(fig, use_container_width=True)
     
     with tab5:
         st.subheader("💹 Panel de Trading")
