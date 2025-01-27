@@ -19,8 +19,8 @@ FRED_API_KEY = "8617ec24219966a9191eb6a9d9d9fd24"
 def get_fundamental_data_finviz(ticker):
     try:
         stock = finvizfinance(ticker)
-        fundament = stock.ticker_fundament
-        description = stock.ticker_description
+        fundament = stock.get_fundament()
+        description = stock.get_description()
         return fundament, description
     except Exception as e:
         st.error(f"Error obteniendo datos fundamentales: {e}")
