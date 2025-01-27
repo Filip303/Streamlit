@@ -457,10 +457,18 @@ def create_indicator_subplot(technical_data, selected_symbol, indicator):
     
     return fig
 
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+import yfinance as yf
+import numpy as np
+
+# Configuración de la página
 st.set_page_config(page_title="Trading Platform Pro V5", layout="wide")
 st.title("📈 Trading Platform Pro V5")
 st.warning("⚠️ Sitio en construcción - Solo para uso educativo!")
 
+# Columnas para los inputs
 col1, col2, col3 = st.columns(3)
 with col1:
     symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
@@ -473,6 +481,7 @@ with col3:
     confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
     risk_free_rate = st.number_input("Tasa Libre de Riesgo Anual (%)", 0.0, 100.0, 2.0) / 100.0
 
+# Obtener datos del portafolio
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
@@ -542,20 +551,20 @@ if portfolio_data is not None and not portfolio_data.empty:
         selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators, key="indicators_select")
         
         if len(selected_indicators) > 0:
-        technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
-        fig = plot_price_chart(technical_data, selected_symbol, chart_type)
-        
-        # Añadir indicadores al gráfico
-        plot_indicators(fig, technical_data, selected_symbol, selected_indicators)
-        
-        fig.update_layout(
-            title=f"Análisis Técnico - {selected_symbol}",
-            xaxis_title="Fecha",
-            yaxis_title="Precio",
-            height=600,
-            yaxis_type='log'
-        )
-        st.plotly_chart(fig, use_container_width=True, key="technical_chart")
+            technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
+            fig = plot_price_chart(technical_data, selected_symbol, chart_type)
+            
+            # Añadir indicadores al gráfico
+            plot_indicators(fig, technical_data, selected_symbol, selected_indicators)
+            
+            fig.update_layout(
+                title=f"Análisis Técnico - {selected_symbol}",
+                xaxis_title="Fecha",
+                yaxis_title="Precio",
+                height=600,
+                yaxis_type='log'
+            )
+            st.plotly_chart(fig, use_container_width=True, key="technical_chart")
             
             if chart_type == 'Candlestick':
                 fig.add_trace(go.Candlestick(
@@ -733,35 +742,35 @@ if portfolio_data is not None and not portfolio_data.empty:
         col1, col2 = st.columns([7, 3])
 
         with col1:
-        if trading_data is not None and not trading_data.empty:
-            fig = plot_price_chart(trading_data, selected_symbol, chart_type)
-            
-            if stop_loss > 0:
-                fig.add_trace(go.Scatter(
-                    x=trading_data.index,
-                    y=[stop_loss] * len(trading_data.index),
-                    mode='lines',
-                    name='Stop Loss',
-                    line=dict(color='red', dash='dash')
-                ))
-            
-            if take_profit > 0:
-                fig.add_trace(go.Scatter(
-                    x=trading_data.index,
-                    y=[take_profit] * len(trading_data.index),
-                    mode='lines',
-                    name='Take Profit',
-                    line=dict(color='green', dash='dash')
-                ))
-            
-            fig.update_layout(
-                title=f"Trading View - {selected_symbol}",
-                xaxis_title="Fecha",
-                yaxis_title="Precio",
-                height=600,
-                yaxis_type='log'
-            )
-            st.plotly_chart(fig, use_container_width=True, key="trading_view_chart")
+            if trading_data is not None and not trading_data.empty:
+                fig = plot_price_chart(trading_data, selected_symbol, chart_type)
+                
+                if stop_loss > 0:
+                    fig.add_trace(go.Scatter(
+                        x=trading_data.index,
+                        y=[stop_loss] * len(trading_data.index),
+                        mode='lines',
+                        name='Stop Loss',
+                        line=dict(color='red', dash='dash')
+                    ))
+                
+                if take_profit > 0:
+                    fig.add_trace(go.Scatter(
+                        x=trading_data.index,
+                        y=[take_profit] * len(trading_data.index),
+                        mode='lines',
+                        name='Take Profit',
+                        line=dict(color='green', dash='dash')
+                    ))
+                
+                fig.update_layout(
+                    title=f"Trading View - {selected_symbol}",
+                    xaxis_title="Fecha",
+                    yaxis_title="Precio",
+                    height=600,
+                    yaxis_type='log'
+                )
+                st.plotly_chart(fig, use_container_width=True, key="trading_view_chart")
 
         with col2:
             if info:
