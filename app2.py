@@ -82,27 +82,59 @@ def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplie
         return 0, 0, 0
         
 def get_portfolio_data(tickers, period, interval):
-   portfolio_data = pd.DataFrame()
-   info_dict = {}
-   
-   for ticker in tickers:
-       try:
-           stock = yf.Ticker(ticker)
-           df = stock.history(period=period, interval=interval)
-           if not df.empty:
-               for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
-                   portfolio_data[f"{ticker}_{col}"] = df[col]
-               info_dict[ticker] = stock.info
-           else:
-               st.warning(f"No hay datos para {ticker}")
-       except Exception as e:
-           st.warning(f"Error al obtener datos de {ticker}: {e}")
-           
-   if portfolio_data.empty:
-       st.error("No se pudieron obtener datos para ningún símbolo")
-       return None, None
-       
-   return portfolio_data, info_dict
+    portfolio_data = pd.DataFrame()
+    info_dict = {}
+    
+    for ticker in tickers:
+        try:
+            stock = yf.Ticker(ticker)
+            df = stock.history(period=period, interval=interval)
+            if not df.empty:
+                portfolio_data[f"{ticker}_Open"] = df['Open']
+                portfolio_data[f"{ticker}_High"] = df['High']
+                portfolio_data[f"{ticker}_Low"] = df['Low']
+                portfolio_data[f"{ticker}_Close"] = df['Close']
+                portfolio_data[f"{ticker}_Volume"] = df['Volume']
+                info_dict[ticker] = stock.info
+        except Exception as e:
+            st.warning(f"Error obteniendo datos para {ticker}: {e}")
+    
+    return portfolio_data, info_dict
+
+def plot_price_chart(data, symbol, chart_type='Line'):
+    fig = go.Figure()
+    
+    try:
+        if chart_type == 'Candlestick' and all(f"{symbol}_{col}" in data.columns for col in ['Open', 'High', 'Low', 'Close']):
+            fig.add_trace(go.Candlestick(
+                x=data.index,
+                open=data[f"{symbol}_Open"],
+                high=data[f"{symbol}_High"],
+                low=data[f"{symbol}_Low"],
+                close=data[f"{symbol}_Close"],
+                name=symbol
+            ))
+        elif chart_type == 'OHLC' and all(f"{symbol}_{col}" in data.columns for col in ['Open', 'High', 'Low', 'Close']):
+            fig.add_trace(go.Ohlc(
+                x=data.index,
+                open=data[f"{symbol}_Open"],
+                high=data[f"{symbol}_High"],
+                low=data[f"{symbol}_Low"],
+                close=data[f"{symbol}_Close"],
+                name=symbol
+            ))
+        else:
+            # Fallback to line chart if data is missing or type is Line
+            if f"{symbol}_Close" in data.columns:
+                fig.add_trace(go.Scatter(
+                    x=data.index,
+                    y=data[f"{symbol}_Close"],
+                    name=symbol
+                ))
+    except Exception as e:
+        st.error(f"Error plotting chart: {e}")
+    
+    return fig
 
 def get_benchmark_data(period, interval):
     try:
@@ -510,8 +542,20 @@ if portfolio_data is not None and not portfolio_data.empty:
         selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators, key="indicators_select")
         
         if len(selected_indicators) > 0:
-            technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
-            fig = go.Figure()
+        technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
+        fig = plot_price_chart(technical_data, selected_symbol, chart_type)
+        
+        # Añadir indicadores al gráfico
+        plot_indicators(fig, technical_data, selected_symbol, selected_indicators)
+        
+        fig.update_layout(
+            title=f"Análisis Técnico - {selected_symbol}",
+            xaxis_title="Fecha",
+            yaxis_title="Precio",
+            height=600,
+            yaxis_type='log'
+        )
+        st.plotly_chart(fig, use_container_width=True, key="technical_chart")
             
             if chart_type == 'Candlestick':
                 fig.add_trace(go.Candlestick(
@@ -689,41 +733,26 @@ if portfolio_data is not None and not portfolio_data.empty:
         col1, col2 = st.columns([7, 3])
 
         with col1:
-            fig = go.Figure()
+        if trading_data is not None and not trading_data.empty:
+            fig = plot_price_chart(trading_data, selected_symbol, chart_type)
             
-            if chart_type == 'Candlestick':
-                fig.add_trace(go.Candlestick(
-                    x=trading_data.index,
-                    open=trading_data[f'{selected_symbol}_Open'],
-                    high=trading_data[f'{selected_symbol}_High'],
-                    low=trading_data[f'{selected_symbol}_Low'],
-                    close=trading_data[f'{selected_symbol}_Close'],
-                    name=selected_symbol
-                ))
-            else:
+            if stop_loss > 0:
                 fig.add_trace(go.Scatter(
                     x=trading_data.index,
-                    y=trading_data[f'{selected_symbol}_Close'],
-                    name=selected_symbol
+                    y=[stop_loss] * len(trading_data.index),
+                    mode='lines',
+                    name='Stop Loss',
+                    line=dict(color='red', dash='dash')
                 ))
-
-            fig.add_trace(go.Scatter(
-                x=trading_data.index,
-                y=[stop_loss] * len(trading_data.index),
-                mode='lines',
-                name='Stop Loss',
-                line=dict(color='red', dash='dash'),
-                showlegend=True
-            ))
-
-            fig.add_trace(go.Scatter(
-                x=trading_data.index,
-                y=[take_profit] * len(trading_data.index),
-                mode='lines',
-                name='Take Profit',
-                line=dict(color='green', dash='dash'),
-                showlegend=True
-            ))
+            
+            if take_profit > 0:
+                fig.add_trace(go.Scatter(
+                    x=trading_data.index,
+                    y=[take_profit] * len(trading_data.index),
+                    mode='lines',
+                    name='Take Profit',
+                    line=dict(color='green', dash='dash')
+                ))
             
             fig.update_layout(
                 title=f"Trading View - {selected_symbol}",
@@ -732,7 +761,7 @@ if portfolio_data is not None and not portfolio_data.empty:
                 height=600,
                 yaxis_type='log'
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="trading_view_chart")
 
         with col2:
             if info:
