@@ -10,4 +10,4 @@ statsmodels>=0.14.1
 requests==2.31.0
 fredapi==0.5.1
 python-dotenv==1.0.0
-finvizfinance==0.14.7
+finvizfinance==0.14.5
