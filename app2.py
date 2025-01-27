@@ -589,68 +589,30 @@ if portfolio_data is not None and not portfolio_data.empty:
                     st.metric("Volume", fundament.get('Volume', 'N/A'))
     
     with tab4:
-    st.subheader("🌍 Análisis Macroeconómico")
-    
-    # Usar dos columnas con proporción específica
-    macro_col1, macro_col2 = st.columns([1, 2])
-    
-    with macro_col1:
-        selected_indicator = st.selectbox(
-            "Indicador Predefinido",
-            options=list(FRED_INDICATORS.keys()),
-            key="macro_indicator"
-        )
-        
-        custom_series = st.text_input(
-            "O introduce código FRED personalizado",
-            key="custom_fred"
-        )
-        
-        start_date = st.date_input(
-            "Fecha Inicio",
-            value=pd.to_datetime("2020-01-01"),
-            key="macro_start"
-        )
-        end_date = st.date_input(
-            "Fecha Fin",
-            value=pd.to_datetime("2024-01-01"),
-            key="macro_end"
-        )
-        
-        if st.button("Obtener Datos", key="macro_button"):
-            series_id = FRED_INDICATORS[selected_indicator] if not custom_series else custom_series
-            fred_data = get_fred_data(series_id, start_date, end_date)
-            
-            if fred_data is not None:
-                with macro_col2:
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                        x=fred_data.index,
-                        y=fred_data['value'],
-                        mode='lines',
-                        name=selected_indicator if not custom_series else custom_series
-                    ))
-                    
-                    fig.update_layout(
-                        title=f"Datos de {selected_indicator if not custom_series else custom_series}",
-                        xaxis_title="Fecha",
-                        yaxis_title="Valor",
-                        height=500
-                    )
-                    
-                    st.plotly_chart(fig, use_container_width=True, key="macro_chart")
-                    
-                    # Estadísticas
-                    st.subheader("Estadísticas")
-                    stats_col1, stats_col2 = st.columns(2)
-                    
-                    with stats_col1:
-                        st.metric("Último Valor", f"{fred_data['value'].iloc[-1]:.2f}")
-                        st.metric("Media", f"{fred_data['value'].mean():.2f}")
-                    
-                    with stats_col2:
-                        st.metric("Mínimo", f"{fred_data['value'].min():.2f}")
-                        st.metric("Máximo", f"{fred_data['value'].max():.2f}")
+        st.subheader("🌍 Análisis Macroeconómico")
+        macro_col1, macro_col2 = st.columns([1, 2])
+        with macro_col1:
+            selected_indicator = st.selectbox("Indicador Predefinido", options=list(FRED_INDICATORS.keys()), key="macro_indicator")
+            custom_series = st.text_input("O introduce código FRED personalizado", key="custom_fred")
+            start_date = st.date_input("Fecha Inicio", value=pd.to_datetime("2020-01-01"), key="macro_start")
+            end_date = st.date_input("Fecha Fin", value=pd.to_datetime("2024-01-01"), key="macro_end")
+            if st.button("Obtener Datos", key="macro_button"):
+                series_id = FRED_INDICATORS[selected_indicator] if not custom_series else custom_series
+                fred_data = get_fred_data(series_id, start_date, end_date)
+                if fred_data is not None:
+                    with macro_col2:
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(x=fred_data.index, y=fred_data['value'], mode='lines', name=selected_indicator if not custom_series else custom_series))
+                        fig.update_layout(title=f"Datos de {selected_indicator if not custom_series else custom_series}", xaxis_title="Fecha", yaxis_title="Valor", height=500)
+                        st.plotly_chart(fig, use_container_width=True, key="macro_chart")
+                        st.subheader("Estadísticas")
+                        stats_col1, stats_col2 = st.columns(2)
+                        with stats_col1:
+                            st.metric("Último Valor", f"{fred_data['value'].iloc[-1]:.2f}")
+                            st.metric("Media", f"{fred_data['value'].mean():.2f}")
+                        with stats_col2:
+                            st.metric("Mínimo", f"{fred_data['value'].min():.2f}")
+                            st.metric("Máximo", f"{fred_data['value'].max():.2f}")
     
     with tab5:
         st.subheader("💹 Panel de Trading")
