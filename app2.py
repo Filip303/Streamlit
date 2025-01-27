@@ -56,26 +56,22 @@ def get_fundamental_data(ticker):
         return None
 
 def get_fred_data(series_id, start_date=None, end_date=None):
-   fred = Fred(api_key=FRED_API_KEY)
-   try:
-       # Convertir fechas a datetime
-       start_dt = pd.to_datetime(start_date)
-       end_dt = pd.to_datetime(end_date)
-       
-       # Limitar end_date al último mes disponible
-       current_dt = pd.to_datetime(datetime.now())
-       end_dt = min(end_dt, current_dt - pd.Timedelta(days=30))
-       
-       data = fred.get_series(series_id, start_dt, end_dt)
-       df = pd.DataFrame(data, columns=['value']).dropna()
-       
-       # Validar rango de fechas
-       df = df[(df.index >= start_dt) & (df.index <= end_dt)]
-       
-       return df
-   except Exception as e:
-       st.error(f"Error en datos FRED: {e}")
-       return None
+    fred = Fred(api_key=FRED_API_KEY)
+    try:
+        # Convertir fechas
+        start_dt = pd.to_datetime(start_date)
+        end_dt = pd.to_datetime(end_date)
+        current_dt = pd.to_datetime(datetime.now())
+        
+        # Obtener datos hasta el último mes disponible
+        data = fred.get_series(series_id, start_dt, end_dt)
+        df = pd.DataFrame(data, columns=['value']).dropna()
+        
+        return df
+    except Exception as e:
+        st.error(f"Error en datos FRED: {e}")
+        return None
+        
 FRED_INDICATORS = {
     'GDP': 'GDP',
     'Real GDP': 'GDPC1',
@@ -593,25 +589,68 @@ if portfolio_data is not None and not portfolio_data.empty:
                     st.metric("Volume", fundament.get('Volume', 'N/A'))
     
     with tab4:
-        st.subheader("🌍 Análisis Macroeconómico")
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            selected_indicator = st.selectbox("Indicador Predefinido", options=list(FRED_INDICATORS.keys()))
-            custom_series = st.text_input("O introduce código FRED personalizado")
-            start_date = st.date_input("Fecha Inicio", value=pd.to_datetime("2020-01-01"))
-            end_date = st.date_input("Fecha Fin", value=pd.to_datetime("2023-12-31"))
-            if st.button("Obtener Datos"):
-                series_id = FRED_INDICATORS[selected_indicator] if not custom_series else custom_series
-                fred_data = get_fred_data(series_id, start_date, end_date)
-                if fred_data is not None:
+    st.subheader("🌍 Análisis Macroeconómico")
+    
+    # Usar dos columnas con proporción específica
+    macro_col1, macro_col2 = st.columns([1, 2])
+    
+    with macro_col1:
+        selected_indicator = st.selectbox(
+            "Indicador Predefinido",
+            options=list(FRED_INDICATORS.keys()),
+            key="macro_indicator"
+        )
+        
+        custom_series = st.text_input(
+            "O introduce código FRED personalizado",
+            key="custom_fred"
+        )
+        
+        start_date = st.date_input(
+            "Fecha Inicio",
+            value=pd.to_datetime("2020-01-01"),
+            key="macro_start"
+        )
+        end_date = st.date_input(
+            "Fecha Fin",
+            value=pd.to_datetime("2024-01-01"),
+            key="macro_end"
+        )
+        
+        if st.button("Obtener Datos", key="macro_button"):
+            series_id = FRED_INDICATORS[selected_indicator] if not custom_series else custom_series
+            fred_data = get_fred_data(series_id, start_date, end_date)
+            
+            if fred_data is not None:
+                with macro_col2:
                     fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=fred_data.index, y=fred_data['value'], mode='lines', name=selected_indicator if not custom_series else custom_series))
-                    fig.update_layout(title=f"Datos de {selected_indicator if not custom_series else custom_series}", xaxis_title="Fecha", yaxis_title="Valor", height=500, xaxis=dict(rangeselector=dict(buttons=list([dict(count=6, label="6m", step="month", stepmode="backward"), dict(count=1, label="1y", step="year", stepmode="backward"), dict(count=2, label="2y", step="year", stepmode="backward"), dict(step="all")])), rangeslider=dict(visible=True)))
-                    st.plotly_chart(fig, use_container_width=True)
-                    with col2:
-                        st.plotly_chart(fig, use_container_width=True, height=600)
-        st.subheader("Estadísticas")
-        col_stats1, col_stats2 = st.columns(2)
+                    fig.add_trace(go.Scatter(
+                        x=fred_data.index,
+                        y=fred_data['value'],
+                        mode='lines',
+                        name=selected_indicator if not custom_series else custom_series
+                    ))
+                    
+                    fig.update_layout(
+                        title=f"Datos de {selected_indicator if not custom_series else custom_series}",
+                        xaxis_title="Fecha",
+                        yaxis_title="Valor",
+                        height=500
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True, key="macro_chart")
+                    
+                    # Estadísticas
+                    st.subheader("Estadísticas")
+                    stats_col1, stats_col2 = st.columns(2)
+                    
+                    with stats_col1:
+                        st.metric("Último Valor", f"{fred_data['value'].iloc[-1]:.2f}")
+                        st.metric("Media", f"{fred_data['value'].mean():.2f}")
+                    
+                    with stats_col2:
+                        st.metric("Mínimo", f"{fred_data['value'].min():.2f}")
+                        st.metric("Máximo", f"{fred_data['value'].max():.2f}")
     
     with tab5:
         st.subheader("💹 Panel de Trading")
