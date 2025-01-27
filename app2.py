@@ -504,7 +504,6 @@ if portfolio_data is not None and not portfolio_data.empty:
         if metrics:
             metrics_df = pd.DataFrame(columns=['Métrica', 'Portfolio', 'SPY', 'URTH'])
             metrics_df['Métrica'] = ['Sharpe Ratio', 'Sortino Ratio', 'Max Drawdown', 'VaR', 'CVaR']
-            
             for name in ['Portfolio', 'SPY', 'URTH']:
                 if name in metrics:
                     metrics_df[name] = [
@@ -514,7 +513,6 @@ if portfolio_data is not None and not portfolio_data.empty:
                         f"{metrics[name]['VaR']:.2%}",
                         f"{metrics[name]['CVaR']:.2%}"
                     ]
-            
             st.dataframe(metrics_df, use_container_width=True, hide_index=True)
     
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Análisis de Cartera", "Indicadores Técnicos", "Análisis Fundamental", "Análisis Macro", "Panel de Trading"])
@@ -522,92 +520,34 @@ if portfolio_data is not None and not portfolio_data.empty:
     with tab1:
         st.subheader("Composición de la Cartera (HRP)")
         weights_df = pd.DataFrame({'Activo': weights.index, 'Peso': weights.values * 100})
-        
         if len(symbols) > 1:
-            fig = go.Figure(data=[go.Pie(labels=weights_df['Activo'],
-                                       values=weights_df['Peso'],
-                                       textinfo='label+percent')])
+            fig = go.Figure(data=[go.Pie(labels=weights_df['Activo'], values=weights_df['Peso'], textinfo='label+percent')])
             st.plotly_chart(fig, use_container_width=True, key="portfolio_returns_chart")
-        
         st.dataframe(weights_df.round(2))
-        
         fig = go.Figure()
         for name, metric in metrics.items():
-            fig.add_trace(go.Scatter(
-                x=metric['Returns'].index,
-                y=metric['Returns'],
-                name=name
-            ))
-        
-        fig.update_layout(
-            title="Comparación de Rendimiento",
-            xaxis_title="Fecha",
-            yaxis_title="Retorno Acumulado",
-            height=500,
-            yaxis_type='log'
-        )
+            fig.add_trace(go.Scatter(x=metric['Returns'].index, y=metric['Returns'], name=name))
+        fig.update_layout(title="Comparación de Rendimiento", xaxis_title="Fecha", yaxis_title="Retorno Acumulado", height=500, yaxis_type='log')
         st.plotly_chart(fig, use_container_width=True)
     
     with tab2:
-        available_indicators = [
-            'EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP',
-            'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI',
-            'Bollinger Bands', 'Keltner Channels', 'Ichimoku',
-            'ADX', 'CCI', 'DPO', 'TRIX',
-            'OBV', 'Force Index', 'EOM', 'Volume SMA'
-        ]
+        available_indicators = ['EMA20', 'EMA50', 'SMA20', 'SMA50', 'VWAP', 'RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI', 'Bollinger Bands', 'Keltner Channels', 'Ichimoku', 'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index', 'EOM', 'Volume SMA']
         selected_symbol = st.selectbox("Seleccionar Activo", symbols, key="technical_select")
         selected_indicators = st.multiselect("Indicadores Técnicos", available_indicators, key="indicators_select")
-        
         if len(selected_indicators) > 0:
             technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
             fig = plot_price_chart(technical_data, selected_symbol, chart_type)
-            
             plot_indicators(fig, technical_data, selected_symbol, selected_indicators)
-            
-            fig.update_layout(
-                title=f"Análisis Técnico - {selected_symbol}",
-                xaxis_title="Fecha",
-                yaxis_title="Precio",
-                height=600,
-                yaxis_type='log'
-            )
+            fig.update_layout(title=f"Análisis Técnico - {selected_symbol}", xaxis_title="Fecha", yaxis_title="Precio", height=600, yaxis_type='log')
             st.plotly_chart(fig, use_container_width=True, key="technical_chart")
-            
             if chart_type == 'Candlestick':
-                fig.add_trace(go.Candlestick(
-                    x=technical_data.index,
-                    open=technical_data[f'{selected_symbol}_Open'],
-                    high=technical_data[f'{selected_symbol}_High'],
-                    low=technical_data[f'{selected_symbol}_Low'],
-                    close=technical_data[f'{selected_symbol}_Close'],
-                    name=selected_symbol
-                ))
+                fig.add_trace(go.Candlestick(x=technical_data.index, open=technical_data[f'{selected_symbol}_Open'], high=technical_data[f'{selected_symbol}_High'], low=technical_data[f'{selected_symbol}_Low'], close=technical_data[f'{selected_symbol}_Close'], name=selected_symbol))
             elif chart_type == 'OHLC':
-                fig.add_trace(go.Ohlc(
-                    x=technical_data.index,
-                    open=technical_data[f'{selected_symbol}_Open'],
-                    high=technical_data[f'{selected_symbol}_High'],
-                    low=technical_data[f'{selected_symbol}_Low'],
-                    close=technical_data[f'{selected_symbol}_Close'],
-                    name=selected_symbol
-                ))
+                fig.add_trace(go.Ohlc(x=technical_data.index, open=technical_data[f'{selected_symbol}_Open'], high=technical_data[f'{selected_symbol}_High'], low=technical_data[f'{selected_symbol}_Low'], close=technical_data[f'{selected_symbol}_Close'], name=selected_symbol))
             else:
-                fig.add_trace(go.Scatter(
-                    x=technical_data.index,
-                    y=technical_data[f'{selected_symbol}_Close'],
-                    name=selected_symbol
-                ))
-            
+                fig.add_trace(go.Scatter(x=technical_data.index, y=technical_data[f'{selected_symbol}_Close'], name=selected_symbol))
             plot_indicators(fig, technical_data, selected_symbol, selected_indicators)
-            
-            fig.update_layout(
-                title=f"Análisis Técnico - {selected_symbol}",
-                xaxis_title="Fecha",
-                yaxis_title="Precio",
-                height=600,
-                yaxis_type='log'
-            )
+            fig.update_layout(title=f"Análisis Técnico - {selected_symbol}", xaxis_title="Fecha", yaxis_title="Precio", height=600, yaxis_type='log')
             st.plotly_chart(fig, use_container_width=True, key="technical_analysis_chart")
     
     for i, indicator in enumerate(selected_indicators):
@@ -616,96 +556,60 @@ if portfolio_data is not None and not portfolio_data.empty:
             st.plotly_chart(indicator_fig, use_container_width=True, key=f"indicator_{indicator}_{i}")
     
     with tab3:
-    st.subheader("📊 Análisis Fundamental")
-    fundamental_ticker = st.text_input("Símbolo", "AAPL")
+        st.subheader("📊 Análisis Fundamental")
+        fundamental_ticker = st.text_input("Símbolo", "AAPL")
+        if st.button("Analizar"):
+            fundament = get_fundamental_data(fundamental_ticker)
+            if fundament:
+                st.write("### Descripción")
+                st.write(fundament.get('Description', 'N/A'))
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Market Cap", fundament.get('Market Cap', 'N/A'))
+                    st.metric("P/E", fundament.get('P/E', 'N/A'))
+                    st.metric("EPS (ttm)", fundament.get('EPS (ttm)', 'N/A'))
+                    st.metric("Beta", fundament.get('Beta', 'N/A'))
+                with col2:
+                    st.metric("ROE", fundament.get('ROE', 'N/A'))
+                    st.metric("ROI", fundament.get('ROI', 'N/A'))
+                    st.metric("Profit Margin", fundament.get('Profit Margin', 'N/A'))
+                    st.metric("Operating Margin", fundament.get('Operating Margin', 'N/A'))
+                with col3:
+                    st.metric("Dividend", fundament.get('Dividend %', 'N/A'))
+                    st.metric("Payout Ratio", fundament.get('Payout', 'N/A'))
+                    st.metric("52W Range", f"{fundament.get('52W Low', 'N/A')} - {fundament.get('52W High', 'N/A')}")
+                    st.metric("Volume", fundament.get('Volume', 'N/A'))
     
-    if st.button("Analizar"):
-        fundament = get_fundamental_data(fundamental_ticker)
-        
-        if fundament:
-            st.write("### Descripción")
-            st.write(fundament.get('Description', 'N/A'))
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Market Cap", fundament.get('Market Cap', 'N/A'))
-                st.metric("P/E", fundament.get('P/E', 'N/A'))
-                st.metric("EPS (ttm)", fundament.get('EPS (ttm)', 'N/A'))
-                st.metric("Beta", fundament.get('Beta', 'N/A'))
-            
-            with col2:
-                st.metric("ROE", fundament.get('ROE', 'N/A'))
-                st.metric("ROI", fundament.get('ROI', 'N/A'))
-                st.metric("Profit Margin", fundament.get('Profit Margin', 'N/A'))
-                st.metric("Operating Margin", fundament.get('Operating Margin', 'N/A'))
-            
-            with col3:
-                st.metric("Dividend", fundament.get('Dividend %', 'N/A'))
-                st.metric("Payout Ratio", fundament.get('Payout', 'N/A'))
-                st.metric("52W Range", f"{fundament.get('52W Low', 'N/A')} - {fundament.get('52W High', 'N/A')}")
-                st.metric("Volume", fundament.get('Volume', 'N/A'))
     with tab4:
         st.subheader("🌍 Análisis Macroeconómico")
-        
         col1, col2 = st.columns([1, 2])
-        
         with col1:
-            selected_indicator = st.selectbox(
-                "Indicador Predefinido",
-                options=list(FRED_INDICATORS.keys())
-            )
-            
+            selected_indicator = st.selectbox("Indicador Predefinido", options=list(FRED_INDICATORS.keys()))
             custom_series = st.text_input("O introduce código FRED personalizado")
-            
-            start_date = st.date_input(
-                "Fecha Inicio",
-                value=pd.to_datetime("2020-01-01")
-            )
-            end_date = st.date_input(
-                "Fecha Fin",
-                value=pd.to_datetime("2023-12-31")
-            )
-            
+            start_date = st.date_input("Fecha Inicio", value=pd.to_datetime("2020-01-01"))
+            end_date = st.date_input("Fecha Fin", value=pd.to_datetime("2023-12-31"))
             if st.button("Obtener Datos"):
                 series_id = FRED_INDICATORS[selected_indicator] if not custom_series else custom_series
                 fred_data = get_fred_data(series_id, start_date, end_date)
-                
                 if fred_data is not None:
                     fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                        x=fred_data.index,
-                        y=fred_data['value'],
-                        mode='lines',
-                        name=selected_indicator if not custom_series else custom_series
-                    ))
-                    
-                    fig.update_layout(
-                        title=f"Datos de {selected_indicator if not custom_series else custom_series}",
-                        xaxis_title="Fecha",
-                        yaxis_title="Valor",
-                        height=500
-                    )
-                    
+                    fig.add_trace(go.Scatter(x=fred_data.index, y=fred_data['value'], mode='lines', name=selected_indicator if not custom_series else custom_series))
+                    fig.update_layout(title=f"Datos de {selected_indicator if not custom_series else custom_series}", xaxis_title="Fecha", yaxis_title="Valor", height=500)
                     with col2:
                         st.plotly_chart(fig, use_container_width=True, key="macro_chart")
-                        
                         st.subheader("Estadísticas")
                         stats_col1, stats_col2 = st.columns(2)
-                        
                         with stats_col1:
                             st.metric("Último Valor", f"{fred_data['value'].iloc[-1]:.2f}")
                             st.metric("Media", f"{fred_data['value'].mean():.2f}")
-                            
                         with stats_col2:
                             st.metric("Mínimo", f"{fred_data['value'].min():.2f}")
                             st.metric("Máximo", f"{fred_data['value'].max():.2f}")
-
+    
     with tab5:
         st.subheader("💹 Panel de Trading")
         trading_symbol_input = st.text_input("Símbolo para Trading", "AAPL", key='trading_symbol_input')
         selected_symbol = trading_symbol_input.strip()
-
         try:
             stock = yf.Ticker(selected_symbol)
             info = stock.info
@@ -715,63 +619,32 @@ if portfolio_data is not None and not portfolio_data.empty:
         except Exception as e:
             st.error(f"Error al verificar símbolo: {e}")
             st.stop()
-
-        risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", 
-                                min_value=2.0, max_value=5.0, value=3.0, step=0.1)
-
+        risk_multiplier = st.slider("Multiplicador de Riesgo para Take Profit", min_value=2.0, max_value=5.0, value=3.0, step=0.1)
         trading_data = stock.history(period=period, interval=interval)
-
         if trading_data is not None and not trading_data.empty:
             trading_data = trading_data.rename(columns={col: f"{selected_symbol}_{col}" for col in trading_data.columns})
             trading_data = trading_data.replace([np.inf, -np.inf], np.nan).dropna()
-            
             if len(trading_data) >= 2:
-                stop_loss, take_profit, volatility = calculate_dynamic_levels(
-                    trading_data, selected_symbol, confidence_level, risk_multiplier)
+                stop_loss, take_profit, volatility = calculate_dynamic_levels(trading_data, selected_symbol, confidence_level, risk_multiplier)
             else:
                 stop_loss, take_profit, volatility = 0, 0, 0
         else:
             stop_loss, take_profit, volatility = 0, 0, 0
-
         col1, col2 = st.columns([7, 3])
-
         with col1:
             if trading_data is not None and not trading_data.empty:
                 fig = plot_price_chart(trading_data, selected_symbol, chart_type)
-                
                 if stop_loss > 0:
-                    fig.add_trace(go.Scatter(
-                        x=trading_data.index,
-                        y=[stop_loss] * len(trading_data.index),
-                        mode='lines',
-                        name='Stop Loss',
-                        line=dict(color='red', dash='dash')
-                    ))
-                
+                    fig.add_trace(go.Scatter(x=trading_data.index, y=[stop_loss] * len(trading_data.index), mode='lines', name='Stop Loss', line=dict(color='red', dash='dash')))
                 if take_profit > 0:
-                    fig.add_trace(go.Scatter(
-                        x=trading_data.index,
-                        y=[take_profit] * len(trading_data.index),
-                        mode='lines',
-                        name='Take Profit',
-                        line=dict(color='green', dash='dash')
-                    ))
-                
-                fig.update_layout(
-                    title=f"Trading View - {selected_symbol}",
-                    xaxis_title="Fecha",
-                    yaxis_title="Precio",
-                    height=600,
-                    yaxis_type='log'
-                )
+                    fig.add_trace(go.Scatter(x=trading_data.index, y=[take_profit] * len(trading_data.index), mode='lines', name='Take Profit', line=dict(color='green', dash='dash')))
+                fig.update_layout(title=f"Trading View - {selected_symbol}", xaxis_title="Fecha", yaxis_title="Precio", height=600, yaxis_type='log')
                 st.plotly_chart(fig, use_container_width=True, key="trading_view_chart")
-
         with col2:
             if info:
                 st.write(f"**Nombre:** {info.get('longName', 'N/A')}")
                 st.write(f"**Sector:** {info.get('sector', 'N/A')}")
                 st.write(f"**Industria:** {info.get('industry', 'N/A')}")
-                
             current_price = trading_data[f'{selected_symbol}_Close'].iloc[-1]
             st.metric("Precio Actual", f"${current_price:.2f}")
             st.metric("Volatilidad", f"{volatility:.2%}")
