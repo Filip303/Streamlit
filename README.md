@@ -7,3 +7,4 @@ El archivo `ads.txt` es utilizado para garantizar la transparencia y autorizaci√
 
 ### Contenido
 El archivo incluye la informaci√≥n requerida por Google AdSense:
+google.com, pub-5806669438259617, DIRECT, f08c47fec0942fa0
