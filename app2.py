@@ -477,7 +477,7 @@ if portfolio_data is not None and not portfolio_data.empty:
             fig = go.Figure(data=[go.Pie(labels=weights_df['Activo'],
                                        values=weights_df['Peso'],
                                        textinfo='label+percent')])
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="portfolio_returns_chart")
         
         st.dataframe(weights_df.round(2))
         
@@ -547,12 +547,12 @@ if portfolio_data is not None and not portfolio_data.empty:
                 height=600,
                 yaxis_type='log'
             )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            for indicator in selected_indicators:
-                if indicator in ['RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI', 'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index', 'EOM']:
-                    indicator_fig = create_indicator_subplot(technical_data, selected_symbol, indicator)
-                    st.plotly_chart(indicator_fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="technical_analysis_chart")
+    
+    for i, indicator in enumerate(selected_indicators):
+        if indicator in ['RSI', 'Stoch RSI', 'MACD', 'MFI', 'TSI', 'ADX', 'CCI', 'DPO', 'TRIX', 'OBV', 'Force Index', 'EOM']:
+            indicator_fig = create_indicator_subplot(technical_data, selected_symbol, indicator)
+            st.plotly_chart(indicator_fig, use_container_width=True, key=f"indicator_{indicator}_{i}")
     
     with tab3:
         st.subheader("📊 Análisis Fundamental")
@@ -641,7 +641,7 @@ if portfolio_data is not None and not portfolio_data.empty:
                     )
                     
                     with col2:
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, use_container_width=True, key="macro_chart")
                         
                         st.subheader("Estadísticas")
                         stats_col1, stats_col2 = st.columns(2)
@@ -745,8 +745,7 @@ if portfolio_data is not None and not portfolio_data.empty:
             st.metric("Volatilidad", f"{volatility:.2%}")
             st.metric("Stop Loss", f"${stop_loss:.2f}", f"{(stop_loss/current_price - 1):.2%}")
             st.metric("Take Profit", f"${take_profit:.2f}", f"{(take_profit/current_price - 1):.2%}")
-    
-    st.plotly_chart(fig, use_container_width=True)
+            
 st.sidebar.markdown("---")
 st.sidebar.info("""
 Características:
