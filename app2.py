@@ -11,31 +11,20 @@ import ta
 import requests
 import time
 from fredapi import Fred
+from finvizfinance.quote import finvizfinance
 
-ALPHA_VANTAGE_KEY = "9M00TPMNCN2ZW1G5"
+
 FRED_API_KEY = "8617ec24219966a9191eb6a9d9d9fd24"
 
-def get_fundamental_data(ticker):
-    url = "https://www.alphavantage.co/query"
-    endpoints = {
-        "overview": {"function": "OVERVIEW", "symbol": ticker},
-        "income": {"function": "INCOME_STATEMENT", "symbol": ticker},
-        "balance": {"function": "BALANCE_SHEET", "symbol": ticker},
-        "cash": {"function": "CASH_FLOW", "symbol": ticker}
-    }
-    
-    data = {}
-    for key, params in endpoints.items():
-        params["apikey"] = ALPHA_VANTAGE_KEY
-        try:
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                data[key] = response.json()
-            time.sleep(0.2)
-        except Exception as e:
-            st.error(f"Error getting {key} data: {e}")
-    
-    return data
+def get_fundamental_data_finviz(ticker):
+    try:
+        stock = finvizfinance(ticker)
+        fundament = stock.TickerFundament()
+        description = stock.TickerDescription()
+        return fundament, description
+    except Exception as e:
+        st.error(f"Error obteniendo datos fundamentales: {e}")
+        return None, None
 
 def get_fred_data(series_id, start_date=None, end_date=None):
     fred = Fred(api_key=FRED_API_KEY)
@@ -457,12 +446,6 @@ def create_indicator_subplot(technical_data, selected_symbol, indicator):
     
     return fig
 
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-import yfinance as yf
-import numpy as np
-
 # Configuración de la página
 st.set_page_config(page_title="Trading Platform Pro V5", layout="wide")
 st.title("📈 Trading Platform Pro V5")
@@ -608,49 +591,90 @@ if portfolio_data is not None and not portfolio_data.empty:
             st.plotly_chart(indicator_fig, use_container_width=True, key=f"indicator_{indicator}_{i}")
     
     with tab3:
-        st.subheader("📊 Análisis Fundamental")
-        fundamental_ticker = st.text_input("Símbolo", "AAPL")
+    st.subheader("📊 Análisis Fundamental")
+    fundamental_ticker = st.text_input("Símbolo", "AAPL")
+    
+    if st.button("Analizar"):
+        fundament, description = get_fundamental_data_finviz(fundamental_ticker)
         
-        if st.button("Analizar"):
-            fundamental_data = get_fundamental_data(fundamental_ticker)
+        if fundament:
+            st.write("### Descripción")
+            st.write(description)
             
-            if fundamental_data and 'overview' in fundamental_data:
-                overview = fundamental_data['overview']
-                income = fundamental_data.get('income', {}).get('annualReports', [{}])[0]
-                balance = fundamental_data.get('balance', {}).get('annualReports', [{}])[0]
-                
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.metric("Market Cap", f"${overview.get('MarketCapitalization', 'N/A')}")
-                    st.metric("P/E Ratio", overview.get('PERatio', 'N/A'))
-                    st.metric("Beta", overview.get('Beta', 'N/A'))
-                
-                with col2:
-                    st.metric("ROE", f"{overview.get('ReturnOnEquityTTM', 'N/A')}%")
-                    st.metric("Profit Margin", f"{overview.get('ProfitMargin', 'N/A')}%")
-                    st.metric("Operating Margin", f"{overview.get('OperatingMarginTTM', 'N/A')}%")
-                
-                with col3:
-                    st.metric("Dividend Yield", f"{overview.get('DividendYield', 'N/A')}%")
-                    st.metric("Payout Ratio", overview.get('PayoutRatio', 'N/A'))
-                    st.metric("52W High/Low", f"${overview.get('52WeekHigh', 'N/A')}/${overview.get('52WeekLow', 'N/A')}")
-
-                st.subheader("Estados Financieros")
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write("**Income Statement**")
-                    st.write(f"Revenue: ${income.get('totalRevenue', 'N/A')}")
-                    st.write(f"Gross Profit: ${income.get('grossProfit', 'N/A')}")
-                    st.write(f"Net Income: ${income.get('netIncome', 'N/A')}")
-                
-                with col2:
-                    st.write("**Balance Sheet**")
-                    st.write(f"Total Assets: ${balance.get('totalAssets', 'N/A')}")
-                    st.write(f"Total Liabilities: ${balance.get('totalLiabilities', 'N/A')}")
-                    st.write(f"Total Equity: ${balance.get('totalShareholderEquity', 'N/A')}")
-
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Market Cap", fundament.get('Market Cap', 'N/A'))
+                st.metric("P/E", fundament.get('P/E', 'N/A'))
+                st.metric("EPS (ttm)", fundament.get('EPS (ttm)', 'N/A'))
+                st.metric("Beta", fundament.get('Beta', 'N/A'))
+            
+            with col2:
+                st.metric("ROE", fundament.get('ROE', 'N/A'))
+                st.metric("ROI", fundament.get('ROI', 'N/A'))
+                st.metric("Profit Margin", fundament.get('Profit Margin', 'N/A'))
+                st.metric("Operating Margin", fundament.get('Operating Margin', 'N/A'))
+            
+            with col3:
+                st.metric("Dividend Yield", fundament.get('Dividend %', 'N/A'))
+                st.metric("Payout Ratio", fundament.get('Payout', 'N/A'))
+                st.metric("52W Range", f"{fundament.get('52W Low', 'N/A')} - {fundament.get('52W High', 'N/A')}")
+                st.metric("Volume", fundament.get('Volume', 'N/A'))
+            
+            # Métricas adicionales
+            st.write("### Métricas Avanzadas")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write("**Valoración**")
+                metrics = {
+                    'PEG': 'PEG',
+                    'P/S': 'P/S',
+                    'P/B': 'P/B',
+                    'P/C': 'P/C',
+                    'P/FCF': 'P/FCF'
+                }
+                for label, key in metrics.items():
+                    st.write(f"{label}: {fundament.get(key, 'N/A')}")
+            
+            with col2:
+                st.write("**Eficiencia**")
+                metrics = {
+                    'Gross Margin': 'Gross Margin',
+                    'Debt/Eq': 'Debt/Eq',
+                    'Current Ratio': 'Current Ratio',
+                    'Quick Ratio': 'Quick Ratio',
+                    'LT Debt/Eq': 'LT Debt/Eq'
+                }
+                for label, key in metrics.items():
+                    st.write(f"{label}: {fundament.get(key, 'N/A')}")
+            
+            st.write("### Crecimiento y Rendimiento")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write("**Crecimiento**")
+                growth_metrics = {
+                    'Sales Q/Q': 'Sales Q/Q',
+                    'EPS Q/Q': 'EPS Q/Q',
+                    'EPS this Y': 'EPS this Y',
+                    'EPS next Y': 'EPS next Y',
+                    'Sales past 5Y': 'Sales past 5Y'
+                }
+                for label, key in growth_metrics.items():
+                    st.write(f"{label}: {fundament.get(key, 'N/A')}")
+            
+            with col2:
+                st.write("**Rendimiento**")
+                perf_metrics = {
+                    'Perf Week': 'Perf Week',
+                    'Perf Month': 'Perf Month',
+                    'Perf Quarter': 'Perf Quarter',
+                    'Perf YTD': 'Perf YTD',
+                    'Perf Year': 'Perf Year'
+                }
+                for label, key in perf_metrics.items():
+                    st.write(f"{label}: {fundament.get(key, 'N/A')}")
     with tab4:
         st.subheader("🌍 Análisis Macroeconómico")
         
