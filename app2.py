@@ -446,12 +446,10 @@ def create_indicator_subplot(technical_data, selected_symbol, indicator):
     
     return fig
 
-# Configuración de la página
 st.set_page_config(page_title="Trading Platform Pro V5", layout="wide")
 st.title("📈 Trading Platform Pro V5")
 st.warning("⚠️ Sitio en construcción - Solo para uso educativo!")
 
-# Columnas para los inputs
 col1, col2, col3 = st.columns(3)
 with col1:
     symbols_input = st.text_input("Símbolos (separados por coma)", "AAPL,MSFT,GOOGL")
@@ -464,7 +462,6 @@ with col3:
     confidence_level = st.slider("Nivel de Confianza (%)", 90, 99, 95) / 100
     risk_free_rate = st.number_input("Tasa Libre de Riesgo Anual (%)", 0.0, 100.0, 2.0) / 100.0
 
-# Obtener datos del portafolio
 portfolio_data, info_dict = get_portfolio_data(symbols, period, interval)
 
 if portfolio_data is not None and not portfolio_data.empty:
@@ -537,7 +534,6 @@ if portfolio_data is not None and not portfolio_data.empty:
             technical_data = calculate_technical_indicators(portfolio_data, selected_symbol)
             fig = plot_price_chart(technical_data, selected_symbol, chart_type)
             
-            # Añadir indicadores al gráfico
             plot_indicators(fig, technical_data, selected_symbol, selected_indicators)
             
             fig.update_layout(
@@ -591,90 +587,89 @@ if portfolio_data is not None and not portfolio_data.empty:
             st.plotly_chart(indicator_fig, use_container_width=True, key=f"indicator_{indicator}_{i}")
     
     with tab3:
-    st.subheader("📊 Análisis Fundamental")
-    fundamental_ticker = st.text_input("Símbolo", "AAPL")
-    
-    if st.button("Analizar"):
-        fundament, description = get_fundamental_data_finviz(fundamental_ticker)
+        st.subheader("📊 Análisis Fundamental")
+        fundamental_ticker = st.text_input("Símbolo", "AAPL")
         
-        if fundament:
-            st.write("### Descripción")
-            st.write(description)
+        if st.button("Analizar"):
+            fundament, description = get_fundamental_data_finviz(fundamental_ticker)
             
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Market Cap", fundament.get('Market Cap', 'N/A'))
-                st.metric("P/E", fundament.get('P/E', 'N/A'))
-                st.metric("EPS (ttm)", fundament.get('EPS (ttm)', 'N/A'))
-                st.metric("Beta", fundament.get('Beta', 'N/A'))
-            
-            with col2:
-                st.metric("ROE", fundament.get('ROE', 'N/A'))
-                st.metric("ROI", fundament.get('ROI', 'N/A'))
-                st.metric("Profit Margin", fundament.get('Profit Margin', 'N/A'))
-                st.metric("Operating Margin", fundament.get('Operating Margin', 'N/A'))
-            
-            with col3:
-                st.metric("Dividend Yield", fundament.get('Dividend %', 'N/A'))
-                st.metric("Payout Ratio", fundament.get('Payout', 'N/A'))
-                st.metric("52W Range", f"{fundament.get('52W Low', 'N/A')} - {fundament.get('52W High', 'N/A')}")
-                st.metric("Volume", fundament.get('Volume', 'N/A'))
-            
-            # Métricas adicionales
-            st.write("### Métricas Avanzadas")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write("**Valoración**")
-                metrics = {
-                    'PEG': 'PEG',
-                    'P/S': 'P/S',
-                    'P/B': 'P/B',
-                    'P/C': 'P/C',
-                    'P/FCF': 'P/FCF'
-                }
-                for label, key in metrics.items():
-                    st.write(f"{label}: {fundament.get(key, 'N/A')}")
-            
-            with col2:
-                st.write("**Eficiencia**")
-                metrics = {
-                    'Gross Margin': 'Gross Margin',
-                    'Debt/Eq': 'Debt/Eq',
-                    'Current Ratio': 'Current Ratio',
-                    'Quick Ratio': 'Quick Ratio',
-                    'LT Debt/Eq': 'LT Debt/Eq'
-                }
-                for label, key in metrics.items():
-                    st.write(f"{label}: {fundament.get(key, 'N/A')}")
-            
-            st.write("### Crecimiento y Rendimiento")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write("**Crecimiento**")
-                growth_metrics = {
-                    'Sales Q/Q': 'Sales Q/Q',
-                    'EPS Q/Q': 'EPS Q/Q',
-                    'EPS this Y': 'EPS this Y',
-                    'EPS next Y': 'EPS next Y',
-                    'Sales past 5Y': 'Sales past 5Y'
-                }
-                for label, key in growth_metrics.items():
-                    st.write(f"{label}: {fundament.get(key, 'N/A')}")
-            
-            with col2:
-                st.write("**Rendimiento**")
-                perf_metrics = {
-                    'Perf Week': 'Perf Week',
-                    'Perf Month': 'Perf Month',
-                    'Perf Quarter': 'Perf Quarter',
-                    'Perf YTD': 'Perf YTD',
-                    'Perf Year': 'Perf Year'
-                }
-                for label, key in perf_metrics.items():
-                    st.write(f"{label}: {fundament.get(key, 'N/A')}")
+            if fundament:
+                st.write("### Descripción")
+                st.write(description)
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Market Cap", fundament.get('Market Cap', 'N/A'))
+                    st.metric("P/E", fundament.get('P/E', 'N/A'))
+                    st.metric("EPS (ttm)", fundament.get('EPS (ttm)', 'N/A'))
+                    st.metric("Beta", fundament.get('Beta', 'N/A'))
+                
+                with col2:
+                    st.metric("ROE", fundament.get('ROE', 'N/A'))
+                    st.metric("ROI", fundament.get('ROI', 'N/A'))
+                    st.metric("Profit Margin", fundament.get('Profit Margin', 'N/A'))
+                    st.metric("Operating Margin", fundament.get('Operating Margin', 'N/A'))
+                
+                with col3:
+                    st.metric("Dividend Yield", fundament.get('Dividend %', 'N/A'))
+                    st.metric("Payout Ratio", fundament.get('Payout', 'N/A'))
+                    st.metric("52W Range", f"{fundament.get('52W Low', 'N/A')} - {fundament.get('52W High', 'N/A')}")
+                    st.metric("Volume", fundament.get('Volume', 'N/A'))
+                
+                st.write("### Métricas Avanzadas")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("**Valoración**")
+                    metrics = {
+                        'PEG': 'PEG',
+                        'P/S': 'P/S',
+                        'P/B': 'P/B',
+                        'P/C': 'P/C',
+                        'P/FCF': 'P/FCF'
+                    }
+                    for label, key in metrics.items():
+                        st.write(f"{label}: {fundament.get(key, 'N/A')}")
+                
+                with col2:
+                    st.write("**Eficiencia**")
+                    metrics = {
+                        'Gross Margin': 'Gross Margin',
+                        'Debt/Eq': 'Debt/Eq',
+                        'Current Ratio': 'Current Ratio',
+                        'Quick Ratio': 'Quick Ratio',
+                        'LT Debt/Eq': 'LT Debt/Eq'
+                    }
+                    for label, key in metrics.items():
+                        st.write(f"{label}: {fundament.get(key, 'N/A')}")
+                
+                st.write("### Crecimiento y Rendimiento")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("**Crecimiento**")
+                    growth_metrics = {
+                        'Sales Q/Q': 'Sales Q/Q',
+                        'EPS Q/Q': 'EPS Q/Q',
+                        'EPS this Y': 'EPS this Y',
+                        'EPS next Y': 'EPS next Y',
+                        'Sales past 5Y': 'Sales past 5Y'
+                    }
+                    for label, key in growth_metrics.items():
+                        st.write(f"{label}: {fundament.get(key, 'N/A')}")
+                
+                with col2:
+                    st.write("**Rendimiento**")
+                    perf_metrics = {
+                        'Perf Week': 'Perf Week',
+                        'Perf Month': 'Perf Month',
+                        'Perf Quarter': 'Perf Quarter',
+                        'Perf YTD': 'Perf YTD',
+                        'Perf Year': 'Perf Year'
+                    }
+                    for label, key in perf_metrics.items():
+                        st.write(f"{label}: {fundament.get(key, 'N/A')}")
     with tab4:
         st.subheader("🌍 Análisis Macroeconómico")
         
