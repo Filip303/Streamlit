@@ -12,7 +12,7 @@ import requests
 import time
 from fredapi import Fred
 from finvizfinance.quote import finvizfinance
-
+import streamlit.components.v1 as components
 
 FRED_API_KEY = "8617ec24219966a9191eb6a9d9d9fd24"
 
@@ -697,6 +697,19 @@ if portfolio_data is not None and not portfolio_data.empty:
             display_news_panel(news_symbol)
             
 st.sidebar.markdown("---")
+components.html("""
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<ins class="adsbygoogle"
+     style="display:block;"
+     data-ad-client="ca-pub-5806669438259617"
+     data-ad-slot="XXXXXX"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+""", height=250)
+
 st.sidebar.info("""
 Características:
 - Análisis de cartera con HRP
