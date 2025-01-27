@@ -16,6 +16,38 @@ from finvizfinance.quote import finvizfinance
 
 FRED_API_KEY = "8617ec24219966a9191eb6a9d9d9fd24"
 
+def get_news(symbol, api_key="a00c1a624f854f3c9f48a167ed72eff1"):
+    try:
+        url = f"https://newsapi.org/v2/everything?q={symbol}&apiKey={api_key}&language=es&sortBy=publishedAt&pageSize=10"
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error(f"Error al obtener noticias: {response.status_code}")
+            return None
+    except Exception as e:
+        st.error(f"Error en la solicitud de noticias: {e}")
+        return None
+
+def display_news_panel(symbol):
+    st.subheader("📰 Noticias Relacionadas")
+    
+    news_data = get_news(symbol)
+    if news_data and news_data.get('articles'):
+        for article in news_data['articles']:
+            with st.expander(article['title'], expanded=False):
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(article['description'])
+                    if article.get('url'):
+                        st.markdown(f"[Leer más]({article['url']})")
+                with col2:
+                    st.write(f"Fuente: {article.get('source', {}).get('name', 'N/A')}")
+                    st.write(f"Fecha: {pd.to_datetime(article['publishedAt']).strftime('%Y-%m-%d %H:%M')}")
+    else:
+        st.info("No se encontraron noticias para este símbolo.")
+
+
 def get_fundamental_data(ticker):
     try:
         stock = yf.Ticker(ticker)
@@ -523,7 +555,7 @@ if portfolio_data is not None and not portfolio_data.empty:
                     ]
             st.dataframe(metrics_df, use_container_width=True, hide_index=True)
     
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Análisis de Cartera", "Indicadores Técnicos", "Análisis Fundamental", "Análisis Macro", "Panel de Trading"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Análisis de Cartera", "Indicadores Técnicos", "Análisis Fundamental", "Análisis Macro", "Panel de Trading", "Noticias"])
     
     with tab1:
         st.subheader("Composición de la Cartera (HRP)")
@@ -658,6 +690,11 @@ if portfolio_data is not None and not portfolio_data.empty:
             st.metric("Volatilidad", f"{volatility:.2%}")
             st.metric("Stop Loss", f"${stop_loss:.2f}", f"{(stop_loss/current_price - 1):.2%}")
             st.metric("Take Profit", f"${take_profit:.2f}", f"{(take_profit/current_price - 1):.2%}")
+    
+    with tab6:
+        news_symbol = st.text_input("Símbolo para Noticias", value=selected_symbol if 'selected_symbol' in locals() else "AAPL")
+        if st.button("Buscar Noticias"):
+            display_news_panel(news_symbol)
             
 st.sidebar.markdown("---")
 st.sidebar.info("""
