@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 from scipy.stats import norm
-import statsmodels.api as sm
 import ta
 import requests
 import time
@@ -64,19 +63,23 @@ FRED_INDICATORS = {
 }
 
 def calculate_dynamic_levels(data, symbol, confidence_level=0.95, risk_multiplier=3):
-   if f'{symbol}_Close' not in data.columns:
-       return 0, 0, 0
-       
-   returns = pd.Series(np.log(data[f'{symbol}_Close']).diff().dropna())
-   conditional_vol = calculate_har_volatility(returns)
-   z_score = norm.ppf(confidence_level)
-   current_price = data[f'{symbol}_Close'].iloc[-1]
-   
-   stop_loss = current_price * np.exp(-z_score * conditional_vol)
-   risk = current_price - stop_loss
-   take_profit = current_price + (risk * risk_multiplier)
-   
-   return stop_loss, take_profit, conditional_vol
+    try:
+        if f'{symbol}_Close' not in data.columns or len(data) < 2:
+            return 0, 0, 0
+            
+        returns = pd.Series(np.log(data[f'{symbol}_Close']).diff().dropna())
+        conditional_vol = calculate_har_volatility(returns)
+        z_score = norm.ppf(confidence_level)
+        current_price = data[f'{symbol}_Close'].iloc[-1]
+        
+        stop_loss = current_price * np.exp(-z_score * conditional_vol)
+        risk = current_price - stop_loss
+        take_profit = current_price + (risk * risk_multiplier)
+        
+        return stop_loss, take_profit, conditional_vol
+    except Exception as e:
+        st.warning(f"Error calculating dynamic levels: {e}")
+        return 0, 0, 0
 
 def get_portfolio_data(tickers, period, interval):
    portfolio_data = pd.DataFrame()
@@ -116,23 +119,24 @@ def get_benchmark_data(period, interval):
         return None
 
 def calculate_har_volatility(returns, lags=[1, 5, 22], scale_factor=2.5):
-    rv = returns ** 2
-    rv_daily = rv.rolling(window=lags[0]).mean()
-    rv_weekly = rv.rolling(window=lags[1]).mean()
-    rv_monthly = rv.rolling(window=lags[2]).mean()
-    
-    X = pd.DataFrame({
-        'daily': rv_daily.shift(1),
-        'weekly': rv_weekly.shift(1),
-        'monthly': rv_monthly.shift(1)
-    }).fillna(method='bfill')
-    
-    y = rv
-    X = sm.add_constant(X)
-    model = sm.OLS(y, X).fit()
-    
-    forecast = model.predict(X.iloc[-1:]).iloc[0]
-    return np.sqrt(forecast) * scale_factor
+    try:
+        returns = returns.replace([np.inf, -np.inf], np.nan).dropna()
+        if len(returns) < max(lags):
+            return returns.std() * scale_factor
+            
+        rv = returns ** 2
+        rv_daily = rv.rolling(window=lags[0], min_periods=1).mean()
+        rv_weekly = rv.rolling(window=lags[1], min_periods=1).mean()
+        rv_monthly = rv.rolling(window=lags[2], min_periods=1).mean()
+        
+        weights = [0.5, 0.3, 0.2]
+        forecast = (rv_daily.iloc[-1] * weights[0] + 
+                   rv_weekly.iloc[-1] * weights[1] + 
+                   rv_monthly.iloc[-1] * weights[2])
+                   
+        return np.sqrt(forecast) * scale_factor
+    except Exception as e:
+        return returns.std() * scale_factor
 
 def calculate_ichimoku(df, symbol):
     high = df[f'{symbol}_High']
