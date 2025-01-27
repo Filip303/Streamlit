@@ -690,20 +690,20 @@ if portfolio_data is not None and not portfolio_data.empty:
             fig = go.Figure()
             
             if chart_type == 'Candlestick':
-                fig.add_trace(go.Candlestick(
-                    x=trading_data.index,
-                    open=trading_data['Open'],
-                    high=trading_data['High'],
-                    low=trading_data['Low'],
-                    close=trading_data['Close'],
-                    name=selected_symbol
-                ))
-            else:
-                fig.add_trace(go.Scatter(
-                    x=trading_data.index,
-                    y=trading_data['Close'],
-                    name=selected_symbol
-                ))
+    fig.add_trace(go.Candlestick(
+        x=trading_data.index,
+        open=trading_data[f'{selected_symbol}_Open'],
+        high=trading_data[f'{selected_symbol}_High'],
+        low=trading_data[f'{selected_symbol}_Low'],
+        close=trading_data[f'{selected_symbol}_Close'],
+        name=selected_symbol
+    ))
+else:
+    fig.add_trace(go.Scatter(
+        x=trading_data.index,
+        y=trading_data[f'{selected_symbol}_Close'],
+        name=selected_symbol
+    ))
 
             fig.add_trace(go.Scatter(
                 x=trading_data.index,
