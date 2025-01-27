@@ -56,22 +56,26 @@ def get_fundamental_data(ticker):
         return None
 
 def get_fred_data(series_id, start_date=None, end_date=None):
-    fred = Fred(api_key=FRED_API_KEY)
-    try:
-        # Limitar end_date al último mes disponible
-        end_date = min(end_date, datetime.now() - timedelta(days=30))
-        
-        data = fred.get_series(series_id, start_date, end_date)
-        df = pd.DataFrame(data, columns=['value']).dropna()
-        
-        # Validar rango de fechas
-        df = df[(df.index >= start_date) & (df.index <= end_date)]
-        
-        return df
-    except Exception as e:
-        st.error(f"Error en datos FRED: {e}")
-        return None
-
+   fred = Fred(api_key=FRED_API_KEY)
+   try:
+       # Convertir fechas a datetime
+       start_dt = pd.to_datetime(start_date)
+       end_dt = pd.to_datetime(end_date)
+       
+       # Limitar end_date al último mes disponible
+       current_dt = pd.to_datetime(datetime.now())
+       end_dt = min(end_dt, current_dt - pd.Timedelta(days=30))
+       
+       data = fred.get_series(series_id, start_dt, end_dt)
+       df = pd.DataFrame(data, columns=['value']).dropna()
+       
+       # Validar rango de fechas
+       df = df[(df.index >= start_dt) & (df.index <= end_dt)]
+       
+       return df
+   except Exception as e:
+       st.error(f"Error en datos FRED: {e}")
+       return None
 FRED_INDICATORS = {
     'GDP': 'GDP',
     'Real GDP': 'GDPC1',
