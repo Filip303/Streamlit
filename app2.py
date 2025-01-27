@@ -673,19 +673,18 @@ if portfolio_data is not None and not portfolio_data.empty:
                                  min_value=2.0, max_value=5.0, value=3.0, step=0.1)
         
         trading_data = stock.history(period=period, interval=interval)
-        # En la función calculate_dynamic_levels
-if trading_data is not None and not trading_data.empty:
-    trading_data = trading_data.rename(columns={col: f"{selected_symbol}_{col}" for col in trading_data.columns})
-    # Limpiar datos antes del cálculo
-    trading_data = trading_data.replace([np.inf, -np.inf], np.nan).dropna()
-    
-    if len(trading_data) >= 2:  # Verificar que hay suficientes datos
-        stop_loss, take_profit, volatility = calculate_dynamic_levels(
-            trading_data, selected_symbol, confidence_level, risk_multiplier)
-    else:
-        stop_loss, take_profit, volatility = 0, 0, 0
-else:
-    stop_loss, take_profit, volatility = 0, 0, 0
+        
+        if trading_data is not None and not trading_data.empty:
+            trading_data = trading_data.rename(columns={col: f"{selected_symbol}_{col}" for col in trading_data.columns})
+            trading_data = trading_data.replace([np.inf, -np.inf], np.nan).dropna()
+            
+            if len(trading_data) >= 2:
+                stop_loss, take_profit, volatility = calculate_dynamic_levels(
+                    trading_data, selected_symbol, confidence_level, risk_multiplier)
+            else:
+                stop_loss, take_profit, volatility = 0, 0, 0
+        else:
+            stop_loss, take_profit, volatility = 0, 0, 0
         
         with col1:
             fig = go.Figure()
